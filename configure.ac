@@ -281,6 +281,10 @@ AM_CONDITIONAL(OPENCFNETWORK_BUILD_DOCS, [test "${nl_cv_build_docs}" = "yes"])
 #
 # Checks for libraries and packages.
 #
+# At minimum, the following packages are required:
+#
+#   * [Open]CFLite
+#
 # At minimum, the following packages are optional, depending on
 # configuration:
 #
@@ -293,6 +297,30 @@ AC_MSG_NOTICE([checking required package dependencies])
 AC_PATH_PROG([PKG_CONFIG],[pkg-config])
 
 #
+#
+# [Open]CFLite
+#
+
+NL_WITH_REQUIRED_EXTERNAL_PACKAGE([CoreFoundation],
+[CF],
+[CoreFoundation],
+[-lCoreFoundation],
+[
+    # Check for required CoreFoundation (via [Open]CFLite) headers.
+
+    AC_LANG_PUSH([C])
+
+        AC_CHECK_HEADERS([CoreFoundation/CoreFoundation.h],
+            [],
+            [
+                AC_MSG_ERROR(The CoreFoundation header "$ac_header" is required but cannot be found.)
+            ]
+            )
+
+    AC_LANG_POP
+]
+)
+
 # Check for headers
 #
 AC_HEADER_STDBOOL
@@ -320,6 +348,12 @@ AC_TYPE_UINT64_T
 if test "${ac_no_link}" != "yes"; then
     AC_CHECK_FUNCS([memcpy])
 fi
+
+# Add any CoreFoundation CPPFLAGS, LDFLAGS, and LIBS
+
+CPPFLAGS="${CPPFLAGS} ${CF_CPPFLAGS}"
+LIBS="${LIBS} ${CF_LIBS}"
+LDFLAGS="${LDFLAGS} ${CF_LDFLAGS}"
 
 # Add any code coverage CPPFLAGS and LIBS
 
@@ -381,6 +415,10 @@ AC_MSG_NOTICE([
   Doxygen                                   : ${DOXYGEN:--}
   GraphViz dot                              : ${DOT:--}
   PERL                                      : ${PERL:--}
+  CoreFoundation source                     : ${nl_with_CoreFoundation:--}
+  CoreFoundation compile flags              : ${CF_CPPFLAGS:--}
+  CoreFoundation link flags                 : ${CF_LDFLAGS:--}
+  CoreFoundation link libraries             : ${CF_LIBS:--}
   C Preprocessor                            : ${CPP}
   C Compiler                                : ${CC}
   C++ Preprocessor                          : ${CXXCPP}
