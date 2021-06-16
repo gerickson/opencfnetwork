@@ -1,0 +1,17 @@
+Name: CFNetwork
+Short Name: CFNetwork
+URL: https://opensource.apple.com/tarballs/CFNetwork/CFNetwork-129.20.tar.gz
+Version: 129.20
+Date: 2021-06-16
+License: APSL-2.0
+License File: repo/APPLE_LICENSE
+
+Description:
+Access network services and handle changes in network
+configurations. Build on abstractions of network protocols to simplify
+tasks such as working with BSD sockets, administering HTTP and FTP
+servers, and managing Bonjour services.
+
+Local Modifications:
+<none>
+
