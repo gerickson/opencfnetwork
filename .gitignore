@@ -1,0 +1,12 @@
+*.a
+*.o
+.deps
+.dirstamp
+aclocal.m4
+autom4te.cache
+config.log
+config.status
+configure
+libtool
+src/include/opencfnetwork-config.h.in
+Makefile.in
