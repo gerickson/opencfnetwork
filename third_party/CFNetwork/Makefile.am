@@ -74,6 +74,8 @@ lib_LTLIBRARIES                 = libCFNetwork.la
 
 libCFNetwork_la_CPPFLAGS        = -I${top_srcdir}/third_party/CFNetwork/repo -I${top_srcdir}/third_party/CFNetwork/repo/HTTP -I${top_srcdir}/third_party/CFNetwork/repo/Proxies -I${top_srcdir}/third_party/CFNetwork/repo/SharedCode
 
+libCFNetwork_la_LDFLAGS         = -version-info $(LIBCFNETWORK_VERSION_INFO)
+
 libCFNetwork_la_SOURCES         =                                       \
     repo/CFNetwork.c                                                    \
     repo/libresolv.c                                                    \
