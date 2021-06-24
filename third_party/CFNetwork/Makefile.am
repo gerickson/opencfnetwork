@@ -70,6 +70,43 @@ CFNetwork_include_HEADERS       =                                       \
     repo/Headers/CFSocketStream.h                                       \
     $(NULL)
 
+lib_LTLIBRARIES                 = libCFNetwork.la
+
+libCFNetwork_la_CPPFLAGS        = -I${top_srcdir}/third_party/CFNetwork/repo -I${top_srcdir}/third_party/CFNetwork/repo/HTTP -I${top_srcdir}/third_party/CFNetwork/repo/Proxies -I${top_srcdir}/third_party/CFNetwork/repo/SharedCode
+
+libCFNetwork_la_SOURCES         =                                       \
+    repo/CFNetwork.c                                                    \
+    repo/libresolv.c                                                    \
+    repo/JavaScriptGlue.c                                               \
+    repo/FTP/CFFTPStream.c                                              \
+    repo/Host/CFHost.c                                                  \
+    repo/HTTP/CFHTTPAuthentication.c                                    \
+    repo/HTTP/CFHTTPConnection.c                                        \
+    repo/HTTP/CFHTTPFilter.c                                            \
+    repo/HTTP/CFHTTPMessage.c                                           \
+    repo/HTTP/CFHTTPServer.c                                            \
+    repo/HTTP/CFHTTPStream.c                                            \
+    repo/HTTP/SPNEGO/spnegoBlob.cpp                                     \
+    repo/HTTP/SPNEGO/spnegoDER.cpp                                      \
+    repo/HTTP/SPNEGO/spnegoKrb.cpp                                      \
+    repo/HTTP/NTLM/ntlmBlobPriv.cpp                                     \
+    repo/HTTP/NTLM/NtlmGenerator.cpp                                    \
+    repo/NetDiagnostics/CFNetDiagnosticPing.c                           \
+    repo/NetDiagnostics/CFNetDiagnostics.c                              \
+    repo/NetDiagnostics/CFNetDiagnosticsProtocolUser.c                  \
+    repo/NetServices/CFNetServiceBrowser.c                              \
+    repo/NetServices/CFNetServiceMonitor.c                              \
+    repo/NetServices/CFNetServices.c                                    \
+    repo/NetServices/DeprecatedDNSServiceDiscovery.c                    \
+    repo/Proxies/ProxySupport.c                                         \
+    repo/SharedCode/CFNetConnection.c                                   \
+    repo/SharedCode/CFNetworkSchedule.c                                 \
+    repo/SharedCode/CFNetworkThreadSupport.c                            \
+    repo/SharedCode/CFServer.c                                          \
+    repo/Stream/CFSocketStream.c                                        \
+    repo/URL/_CFURLAccess.c                                             \
+    $(NULL)
+
 install-headers: install-CFNetwork_includeHEADERS
 
 # A hook for the 'uninstall' target to ensure that directories this
