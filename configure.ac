@@ -326,8 +326,10 @@ NL_WITH_REQUIRED_EXTERNAL_PACKAGE([CoreFoundation],
 AC_HEADER_STDBOOL
 AC_HEADER_STDC
 
+AC_CHECK_HEADERS([netdb_async.h])
 AC_CHECK_HEADERS([stdint.h])
 AC_CHECK_HEADERS([string.h])
+AC_CHECK_HEADERS([sys/dirent.h])
 
 #
 # Check for types and structures
@@ -340,6 +342,20 @@ AC_TYPE_UINT8_T
 AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
+
+AC_CHECK_MEMBERS(
+        [struct sockaddr.sa_len],
+        [],
+        [],
+        [[#include <sys/socket.h>]]
+    )
+
+AC_CHECK_MEMBERS(
+        [struct sockaddr_in.sin_len],
+        [],
+        [],
+        [[#include <netinet/in.h>]]
+    )
 
 #
 # Checks for library functions
