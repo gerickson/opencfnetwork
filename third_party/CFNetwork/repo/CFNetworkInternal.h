@@ -109,33 +109,35 @@ extern int __CFConstantStringClassReference[];
 #error "Endianness undefined!"
 #endif /* defined(__BYTE_ORDER__) */
 
-#if __CFNETWORK_BYTEORDER_BIG
-# define CONST_STRING_DECL(S, V)         \
-    struct CF_CONST_STRING __ ## S ## __ = {{(uintptr_t)&__CFConstantStringClassReference, {0x00, 0x00, 0x07, 0xc8}}, (uint8_t *)V, sizeof(V) - 1}; \
-const CFStringRef S = (CFStringRef) & __ ## S ## __;
-#elif !defined(__WIN32__) || (defined(__WIN32__) && defined(__GNUC__))
-# define CONST_STRING_DECL(S, V)         \
-    struct CF_CONST_STRING __ ## S ## __ = {{(uintptr_t)&__CFConstantStringClassReference, {0xc8, 0x07, 0x00, 0x00}}, (uint8_t *)V, sizeof(V) - 1}; \
-const CFStringRef S = (CFStringRef) & __ ## S ## __;
-#elif defined(__WIN32__)
-# define CONST_STRING_DECL(S, V)         \
-    struct CF_CONST_STRING __ ## S ## __ = {{(uintptr_t)&__CFConstantStringClassReference, {0xc8, 0x07, 0x00, 0x00}},(uint8_t *) V, sizeof(V) - 1}; \
-CF_EXPORT const CFStringRef S = (CFStringRef) & __ ## S ## __;
-
-# define CONST_STRING_DECL_EXPORT(S, V)          \
-    struct CF_CONST_STRING __ ## S ## __ = {{___WindowsConstantStringClassReference, {0xc8, 0x07, 0x00, 0x00}}, (uint8_t *)V, sizeof(V) - 1}; \
-CF_EXPORT const CFStringRef S = (CFStringRef) & __ ## S ## __;
-
+#if defined(__WIN32__)
+#define _CF_CONST_STRING_BASE_ISA_INIT  ___WindowsConstantStringClassReference
 #else
-# define CONST_STRING_DECL(S, V)         \
-    struct CF_CONST_STRING __ ## S ## __ = {{(uintptr_t)NULL, {0xc8, 0x07, 0x00, 0x00}},(uint8_t *)V, sizeof(V) - 1}; \
-const CFStringRef S = (CFStringRef) & __ ## S ## __;
+#define _CF_CONST_STRING_BASE_ISA_INIT  (uintptr_t)&__CFConstantStringClassReference
+#endif
 
-# define CONST_STRING_DECL_EXPORT(S, V)          \
-    struct CF_CONST_STRING __ ## S ## __ = {{(uintptr_t)NULL, {0xc8, 0x07, 0x00, 0x00}}, (uint8_t *)V, sizeof(V) - 1}; \
-CF_EXPORT const CFStringRef S = (CFStringRef) & __ ## S ## __;
+#if __CFNETWORK_BYTEORDER_BIG
+#define _CF_CONST_STRING_BASE_INFO_INIT { 0x00, 0x00, 0x07, 0xc8 }
+#else
+#define _CF_CONST_STRING_BASE_INFO_INIT { 0xc8, 0x07, 0x00, 0x00 }
+#endif /* __CFNETWORK_BYTEORDER_BIG */
 
-#endif // __CFNETWORK_BYTEORDER_BIG
+#define _CF_CONST_STRING_BASE_INIT      { _CF_CONST_STRING_BASE_ISA_INIT, \
+                                          _CF_CONST_STRING_BASE_INFO_INIT }
+
+#define _CF_CONST_STRING_EXTENT_INIT(V) (uint8_t *)(V), (sizeof (V) - 1)
+
+#define _CF_CONST_STRING_INIT(V)        { _CF_CONST_STRING_BASE_INIT,     \
+			                              _CF_CONST_STRING_EXTENT_INIT(V) }
+
+#define CONST_STRING_DECL_LOCAL(S, V)			\
+    static const struct CF_CONST_STRING __ ## S ## __ = _CF_CONST_STRING_INIT(V);	\
+		static const CFStringRef S = (CFStringRef) & __ ## S ## __;
+#define CONST_STRING_DECL(S, V)                 \
+    static const struct CF_CONST_STRING __ ## S ## __ = _CF_CONST_STRING_INIT(V);	\
+		const CFStringRef S = (CFStringRef) & __ ## S ## __;
+#define CONST_STRING_DECL_EXPORT(S, V)          \
+    static const struct CF_CONST_STRING __ ## S ## __ = _CF_CONST_STRING_INIT(V);	\
+		CF_EXPORT const CFStringRef S = (CFStringRef) & __ ## S ## __;
 
 #undef ___WindowsConstantStringClassReference
 
