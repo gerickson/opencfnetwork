@@ -55,7 +55,7 @@ extern CFNetServiceRef _CFNetServiceCreateCommon(CFAllocatorRef alloc, CFStringR
 #ifdef __CONSTANT_CFSTRINGS__
 #define _kCFNetServiceBrowserBlockingMode	CFSTR("_kCFNetServiceBrowserBlockingMode")
 #else
-static CONST_STRING_DECL(_kCFNetServiceBrowserBlockingMode, "_kCFNetServiceBrowserBlockingMode")
+CONST_STRING_DECL_LOCAL(_kCFNetServiceBrowserBlockingMode, "_kCFNetServiceBrowserBlockingMode")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 static const char _kCFNetServiceBrowserClassName[] = "CFNetServiceBrowser";

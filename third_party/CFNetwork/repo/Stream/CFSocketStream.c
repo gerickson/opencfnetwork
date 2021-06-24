@@ -147,26 +147,26 @@ CONST_STRING_DECL(kCFStreamPropertyPreviousCONNECTResponse, "kCFStreamPropertyPr
 #define _kCFStreamPropertyReadCancel				CFSTR("_kCFStreamPropertyReadCancel")
 #define _kCFStreamPropertyWriteCancel				CFSTR("_kCFStreamPropertyWriteCancel")
 #else
-static CONST_STRING_DECL(_kCFStreamProxySettingSOCKSEnable, "SOCKSEnable")
-static CONST_STRING_DECL(_kCFStreamPropertySocketRemotePort, "_kCFStreamPropertySocketRemotePort")
-static CONST_STRING_DECL(_kCFStreamPropertySocketAddressAttempt, "_kCFStreamPropertySocketAddressAttempt")
-static CONST_STRING_DECL(_kCFStreamPropertySocketFamilyTypeProtocol, "_kCFStreamPropertySocketFamilyTypeProtocol")
-static CONST_STRING_DECL(_kCFStreamPropertyHostForOpen, "_kCFStreamPropertyHostForOpen")
-static CONST_STRING_DECL(_kCFStreamPropertyNetworkReachability, "_kCFStreamPropertyNetworkReachability")
-static CONST_STRING_DECL(_kCFStreamPropertyRecvBuffer, "_kCFStreamPropertyRecvBuffer")
-static CONST_STRING_DECL(_kCFStreamPropertyRecvBufferCount, "_kCFStreamPropertyRecvBufferCount")
-static CONST_STRING_DECL(_kCFStreamPropertyRecvBufferSize, "_kCFStreamPropertyRecvBufferSize")
-static CONST_STRING_DECL(_kCFStreamPropertySecurityRecvBuffer, "_kCFStreamPropertySecurityRecvBuffer")
-static CONST_STRING_DECL(_kCFStreamPropertySecurityRecvBufferSize, "_kCFStreamPropertySecurityRecvBufferSize")
-static CONST_STRING_DECL(_kCFStreamPropertySecurityRecvBufferCount, "_kCFStreamPropertySecurityRecvBufferCount")
-static CONST_STRING_DECL(_kCFStreamPropertyHandshakes, "_kCFStreamPropertyHandshakes")
-static CONST_STRING_DECL(_kCFStreamPropertyCONNECTSendBuffer, "_kCFStreamPropertyCONNECTSendBuffer")
-static CONST_STRING_DECL(_kCFStreamPropertySOCKSSendBuffer, "_kCFStreamPropertySOCKSSendBuffer")
-static CONST_STRING_DECL(_kCFStreamPropertySOCKSRecvBuffer, "_kCFStreamPropertySOCKSRecvBuffer")
-static CONST_STRING_DECL(_kCFStreamPropertyReadCancel, "_kCFStreamPropertyReadCancel")
-static CONST_STRING_DECL(_kCFStreamPropertyWriteCancel, "_kCFStreamPropertyWriteCancel")
-static CONST_STRING_DECL(_kCFStreamPropertyReadTimeout, "_kCFStreamPropertyReadTimeout")
-static CONST_STRING_DECL(_kCFStreamPropertyWriteTimeout, "_kCFStreamPropertyWriteTimeout")
+CONST_STRING_DECL_LOCAL(_kCFStreamProxySettingSOCKSEnable, "SOCKSEnable")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertySocketRemotePort, "_kCFStreamPropertySocketRemotePort")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertySocketAddressAttempt, "_kCFStreamPropertySocketAddressAttempt")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertySocketFamilyTypeProtocol, "_kCFStreamPropertySocketFamilyTypeProtocol")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyHostForOpen, "_kCFStreamPropertyHostForOpen")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyNetworkReachability, "_kCFStreamPropertyNetworkReachability")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyRecvBuffer, "_kCFStreamPropertyRecvBuffer")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyRecvBufferCount, "_kCFStreamPropertyRecvBufferCount")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyRecvBufferSize, "_kCFStreamPropertyRecvBufferSize")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertySecurityRecvBuffer, "_kCFStreamPropertySecurityRecvBuffer")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertySecurityRecvBufferSize, "_kCFStreamPropertySecurityRecvBufferSize")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertySecurityRecvBufferCount, "_kCFStreamPropertySecurityRecvBufferCount")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyHandshakes, "_kCFStreamPropertyHandshakes")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyCONNECTSendBuffer, "_kCFStreamPropertyCONNECTSendBuffer")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertySOCKSSendBuffer, "_kCFStreamPropertySOCKSSendBuffer")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertySOCKSRecvBuffer, "_kCFStreamPropertySOCKSRecvBuffer")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyReadCancel, "_kCFStreamPropertyReadCancel")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyWriteCancel, "_kCFStreamPropertyWriteCancel")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyReadTimeout, "_kCFStreamPropertyReadTimeout")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyWriteTimeout, "_kCFStreamPropertyWriteTimeout")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 #ifdef __MACH__
@@ -198,9 +198,9 @@ CONST_STRING_DECL(kCFStreamPropertyAutoErrorOnSystemChange, "kCFStreamPropertyAu
 #define	_kCFStreamSocketType		CFSTR("_kCFStreamSocketType")
 #define	_kCFStreamSocketProtocol	CFSTR("_kCFStreamSocketProtocol")
 #else
-static CONST_STRING_DECL(_kCFStreamSocketFamily, "_kCFStreamSocketFamily")
-static CONST_STRING_DECL(_kCFStreamSocketType, "_kCFStreamSocketType")
-static CONST_STRING_DECL(_kCFStreamSocketProtocol, "_kCFStreamSocketProtocol")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketFamily, "_kCFStreamSocketFamily")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketType, "_kCFStreamSocketType")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketProtocol, "_kCFStreamSocketProtocol")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 /*
@@ -219,15 +219,15 @@ static CONST_STRING_DECL(_kCFStreamSocketProtocol, "_kCFStreamSocketProtocol")
 #define _kCFStreamSocketBogusPrivateMode			CFSTR("_kCFStreamSocketBogusPrivateMode")
 #define _kCFStreamPropertyBogusRunLoop				CFSTR("_kCFStreamPropertyBogusRunLoop")
 #else
-static CONST_STRING_DECL(_kCFStreamSocketOpenCompletedPrivateMode, "_kCFStreamSocketOpenCompletedPrivateMode")
-static CONST_STRING_DECL(_kCFStreamSocketReadPrivateMode, "_kCFStreamSocketReadPrivateMode")
-static CONST_STRING_DECL(_kCFStreamSocketCanReadPrivateMode, "_kCFStreamSocketCanReadPrivateMode")
-static CONST_STRING_DECL(_kCFStreamSocketWritePrivateMode, "_kCFStreamSocketWritePrivateMode")
-static CONST_STRING_DECL(_kCFStreamSocketCanWritePrivateMode, "_kCFStreamSocketCanWritePrivateMode")
-static CONST_STRING_DECL(_kCFStreamSocketSecurityClosePrivateMode, "_kCFStreamSocketSecurityClosePrivateMode")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketOpenCompletedPrivateMode, "_kCFStreamSocketOpenCompletedPrivateMode")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketReadPrivateMode, "_kCFStreamSocketReadPrivateMode")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketCanReadPrivateMode, "_kCFStreamSocketCanReadPrivateMode")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketWritePrivateMode, "_kCFStreamSocketWritePrivateMode")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketCanWritePrivateMode, "_kCFStreamSocketCanWritePrivateMode")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketSecurityClosePrivateMode, "_kCFStreamSocketSecurityClosePrivateMode")
 
-static CONST_STRING_DECL(_kCFStreamSocketBogusPrivateMode, "_kCFStreamSocketBogusPrivateMode")
-static CONST_STRING_DECL(_kCFStreamPropertyBogusRunLoop, "_kCFStreamPropertyBogusRunLoop")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketBogusPrivateMode, "_kCFStreamSocketBogusPrivateMode")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyBogusRunLoop, "_kCFStreamPropertyBogusRunLoop")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 /* Special strings and formats for performing CONNECT. */
@@ -237,10 +237,10 @@ static CONST_STRING_DECL(_kCFStreamPropertyBogusRunLoop, "_kCFStreamPropertyBogu
 #define _kCFStreamUserAgentHeader	CFSTR("User-Agent")
 #define _kCFStreamHostHeader		CFSTR("Host")
 #else
-static CONST_STRING_DECL(_kCFStreamCONNECTURLFormat, "%@:%d")
-static CONST_STRING_DECL(_kCFStreamCONNECTMethod, "CONNECT")
-static CONST_STRING_DECL(_kCFStreamUserAgentHeader, "User-Agent")
-static CONST_STRING_DECL(_kCFStreamHostHeader, "Host")
+CONST_STRING_DECL_LOCAL(_kCFStreamCONNECTURLFormat, "%@:%d")
+CONST_STRING_DECL_LOCAL(_kCFStreamCONNECTMethod, "CONNECT")
+CONST_STRING_DECL_LOCAL(_kCFStreamUserAgentHeader, "User-Agent")
+CONST_STRING_DECL_LOCAL(_kCFStreamHostHeader, "Host")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 /* AutoVPN strings */
@@ -249,16 +249,16 @@ static CONST_STRING_DECL(_kCFStreamHostHeader, "Host")
 #define _kCFStreamPropertyAutoConnectPriority	CFSTR("OnDemandPriority")
 #define _kCFStreamAutoVPNPriorityDefault		CFSTR("Default")
 #else
-static CONST_STRING_DECL(_kCFStreamAutoHostName, "OnDemandHostName")					/* **FIXME** Remove after PPPControllerPriv.h comes back */
-static CONST_STRING_DECL(_kCFStreamPropertyAutoConnectPriority, "OnDemandPriority")	/* **FIXME** Ditto. */
-static CONST_STRING_DECL(_kCFStreamAutoVPNPriorityDefault, "Default")
+CONST_STRING_DECL_LOCAL(_kCFStreamAutoHostName, "OnDemandHostName")					/* **FIXME** Remove after PPPControllerPriv.h comes back */
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyAutoConnectPriority, "OnDemandPriority")	/* **FIXME** Ditto. */
+CONST_STRING_DECL_LOCAL(_kCFStreamAutoVPNPriorityDefault, "Default")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 /* String used for CopyDescription function */
 #ifdef __CONSTANT_CFSTRINGS__
 #define kCFSocketStreamDescriptionFormat	CFSTR("<SocketStream %p>{flags = 0x%08x, read = %p, write = %p, socket = %@, properties = %p }")
 #else
-static CONST_STRING_DECL(kCFSocketStreamDescriptionFormat, "<SocketStream %p>{flags = 0x%08x, read = %p, write = %p, socket = %@, properties = %p }");
+CONST_STRING_DECL_LOCAL(kCFSocketStreamDescriptionFormat, "<SocketStream %p>{flags = 0x%08x, read = %p, write = %p, socket = %@, properties = %p }");
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 

@@ -44,15 +44,15 @@ extern void _CFSocketStreamCreatePair(CFAllocatorRef alloc, CFStringRef host, UI
 #define _kCFHTTPStreamProxyConnectionHeader		CFSTR("Proxy-Connection")
 #define _kCFHTTPStreamConnectionKeepAlive		CFSTR("keep-alive")
 #else
-static CONST_STRING_DECL(_kCFStreamSocketCreatedCallBack, "_kCFStreamSocketCreatedCallBack")
-static CONST_STRING_DECL(_kCFHTTPConnectionHEADMethod, "HEAD")
-static CONST_STRING_DECL(_kCFHTTPConnectionDescribeFormat, "<HTTP stream context 0x%x>{url = %@, state = %d, conn=0x%x}")
-static CONST_STRING_DECL(_kCFHTTPConnectionPrivateRunLoopMode, "_kCFHTTPConnectionPrivateRunLoopMode")
-static CONST_STRING_DECL(_kCFHTTPSScheme, "https")
-static CONST_STRING_DECL(_kCFNTLMMethod, "NTLM")
-static CONST_STRING_DECL(_kCFHTTPStreamProxyAuthorizationHeader, "Proxy-Authorization")
-static CONST_STRING_DECL(_kCFHTTPStreamProxyConnectionHeader, "Proxy-Connection")
-static CONST_STRING_DECL(_kCFHTTPStreamConnectionKeepAlive, "keep-alive")
+CONST_STRING_DECL_LOCAL(_kCFStreamSocketCreatedCallBack, "_kCFStreamSocketCreatedCallBack")
+CONST_STRING_DECL_LOCAL(_kCFHTTPConnectionHEADMethod, "HEAD")
+CONST_STRING_DECL_LOCAL(_kCFHTTPConnectionDescribeFormat, "<HTTP stream context 0x%x>{url = %@, state = %d, conn=0x%x}")
+CONST_STRING_DECL_LOCAL(_kCFHTTPConnectionPrivateRunLoopMode, "_kCFHTTPConnectionPrivateRunLoopMode")
+CONST_STRING_DECL_LOCAL(_kCFHTTPSScheme, "https")
+CONST_STRING_DECL_LOCAL(_kCFNTLMMethod, "NTLM")
+CONST_STRING_DECL_LOCAL(_kCFHTTPStreamProxyAuthorizationHeader, "Proxy-Authorization")
+CONST_STRING_DECL_LOCAL(_kCFHTTPStreamProxyConnectionHeader, "Proxy-Connection")
+CONST_STRING_DECL_LOCAL(_kCFHTTPStreamConnectionKeepAlive, "keep-alive")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 

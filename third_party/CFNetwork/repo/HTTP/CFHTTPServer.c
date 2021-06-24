@@ -103,15 +103,15 @@
 #define _kCFHTTPServerConnectionHeader			CFSTR("Connection")
 #define _kCFHTTPServerConnectionClose			CFSTR("close")
 #else
-static CONST_STRING_DECL(_kCFHTTPServerDescribeFormat, "<HttpServer 0x%x>{server=%@, connections=%@, info=%@}")
-static CONST_STRING_DECL(_kCFHTTPServerPtrFormat, "<0x%x>")
-static CONST_STRING_DECL(_kCFHTTPServerContentLengthHeader, "Content-length")
-static CONST_STRING_DECL(_kCFHTTPServerContentLengthFormat, "%d")
-static CONST_STRING_DECL(_kCFHTTPServerConnectionDescribeFormat, "<_HttpConnection 0x%x>{server=0x%x, timer=%@, inStream=%@, outStream=%@, responses=%@, requests=%@, buffered=%@}")
-static CONST_STRING_DECL(_kCFHTTPServerTransferEncodingHeader, "Transfer-Encoding")
-static CONST_STRING_DECL(_kCFHTTPServerTransferEncodingChunked, "chunked")
-static CONST_STRING_DECL(_kCFHTTPServerConnectionHeader, "Connection")
-static CONST_STRING_DECL(_kCFHTTPServerConnectionClose, "close")
+CONST_STRING_DECL_LOCAL(_kCFHTTPServerDescribeFormat, "<HttpServer 0x%x>{server=%@, connections=%@, info=%@}")
+CONST_STRING_DECL_LOCAL(_kCFHTTPServerPtrFormat, "<0x%x>")
+CONST_STRING_DECL_LOCAL(_kCFHTTPServerContentLengthHeader, "Content-length")
+CONST_STRING_DECL_LOCAL(_kCFHTTPServerContentLengthFormat, "%d")
+CONST_STRING_DECL_LOCAL(_kCFHTTPServerConnectionDescribeFormat, "<_HttpConnection 0x%x>{server=0x%x, timer=%@, inStream=%@, outStream=%@, responses=%@, requests=%@, buffered=%@}")
+CONST_STRING_DECL_LOCAL(_kCFHTTPServerTransferEncodingHeader, "Transfer-Encoding")
+CONST_STRING_DECL_LOCAL(_kCFHTTPServerTransferEncodingChunked, "chunked")
+CONST_STRING_DECL_LOCAL(_kCFHTTPServerConnectionHeader, "Connection")
+CONST_STRING_DECL_LOCAL(_kCFHTTPServerConnectionClose, "close")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 

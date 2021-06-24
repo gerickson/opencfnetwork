@@ -59,10 +59,10 @@
 #define _kCFServerDescribeFormat	CFSTR("<Server 0x%x>{sockets=[%@, %@], service=%@, info=%@}")
 #define _kCFServerEmptyString		CFSTR("")
 #else
-static CONST_STRING_DECL(_kCFServerNULL, "0x0")
-static CONST_STRING_DECL(_kCFServerPtrFormat, "<0x%x>")
-static CONST_STRING_DECL(_kCFServerDescribeFormat, "<Server 0x%x>{sockets=[%@, %@], service=%@, info=%@}")
-static CONST_STRING_DECL(_kCFServerEmptyString, "")
+CONST_STRING_DECL_LOCAL(_kCFServerNULL, "0x0")
+CONST_STRING_DECL_LOCAL(_kCFServerPtrFormat, "<0x%x>")
+CONST_STRING_DECL_LOCAL(_kCFServerDescribeFormat, "<Server 0x%x>{sockets=[%@, %@], service=%@, info=%@}")
+CONST_STRING_DECL_LOCAL(_kCFServerEmptyString, "")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 

@@ -114,7 +114,6 @@ CONST_STRING_DECL(kCFStreamPropertyFTPPassword_prevalidated, "kCFStreamPropertyF
 CONST_STRING_DECL(kCFStreamPropertyFTPProxy, "kCFStreamPropertyFTPProxy")
 CONST_STRING_DECL(kCFStreamPropertyFTPAttemptPersistentConnection, "kCFStreamPropertyFTPAttemptPersistentConnection")
 
-
 // The following properties when set should NOT effect the key created
 // for the connection cache, therefore their values are stored as bits
 // or as ivars on the ftp stream context.
@@ -127,7 +126,7 @@ CONST_STRING_DECL(_kCFStreamPropertyFTPNewResourceName, "_kCFStreamPropertyFTPNe
 #ifdef __CONSTANT_CFSTRINGS__
 #define kCFStreamPropertyFTPFetchNameList	CFSTR("kCFStreamPropertyFTPFetchNameList")
 #else
-static CONST_STRING_DECL(kCFStreamPropertyFTPFetchNameList, "kCFStreamPropertyFTPFetchNameList")  // SPI property key to perform a NLST instead of a LIST
+CONST_STRING_DECL_LOCAL(kCFStreamPropertyFTPFetchNameList, "kCFStreamPropertyFTPFetchNameList")  // SPI property key to perform a NLST instead of a LIST
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // The following properties are copy only.
@@ -138,7 +137,7 @@ CONST_STRING_DECL(kCFStreamPropertyFTPResourceSize, "kCFStreamPropertyFTPResourc
 #ifdef __CONSTANT_CFSTRINGS__
 #define _kCFStreamPropertyFTPLastHTTPResponse	CFSTR("_kCFStreamPropertyFTPLastHTTPResponse")
 #else
-static CONST_STRING_DECL(_kCFStreamPropertyFTPLastHTTPResponse, "_kCFStreamPropertyFTPLastHTTPResponse")
+CONST_STRING_DECL_LOCAL(_kCFStreamPropertyFTPLastHTTPResponse, "_kCFStreamPropertyFTPLastHTTPResponse")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 #if 0
@@ -178,12 +177,12 @@ CONST_STRING_DECL(kCFFTPResourceModDate, "kCFFTPResourceModDate")
 #define kHTTPSchemeString	CFSTR("http")
 #define kHTTPSSchemeString	CFSTR("https")
 #else
-static CONST_STRING_DECL(kFTPSchemeString, "ftp")
-static CONST_STRING_DECL(kFTPSSchemeString, "ftps")
-static CONST_STRING_DECL(kSOCKS4SchemeString, "socks4")
-static CONST_STRING_DECL(kSOCKS5SchemeString, "socsk5")
-static CONST_STRING_DECL(kHTTPSchemeString, "http")
-static CONST_STRING_DECL(kHTTPSSchemeString, "https")
+CONST_STRING_DECL_LOCAL(kFTPSchemeString, "ftp")
+CONST_STRING_DECL_LOCAL(kFTPSSchemeString, "ftps")
+CONST_STRING_DECL_LOCAL(kSOCKS4SchemeString, "socks4")
+CONST_STRING_DECL_LOCAL(kSOCKS5SchemeString, "socsk5")
+CONST_STRING_DECL_LOCAL(kHTTPSchemeString, "http")
+CONST_STRING_DECL_LOCAL(kHTTPSSchemeString, "https")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Anonymous username and password
@@ -191,8 +190,8 @@ static CONST_STRING_DECL(kHTTPSSchemeString, "https")
 #define kAnonymousUserString		CFSTR("anonymous")
 #define kAnonymousPasswordString	CFSTR("cfnetwork@apple.com")
 #else
-static CONST_STRING_DECL(kAnonymousUserString, "anonymous")
-static CONST_STRING_DECL(kAnonymousPasswordString, "cfnetwork@apple.com")
+CONST_STRING_DECL_LOCAL(kAnonymousUserString, "anonymous")
+CONST_STRING_DECL_LOCAL(kAnonymousPasswordString, "cfnetwork@apple.com")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Format for producing ftp proxy "username"
@@ -200,15 +199,15 @@ static CONST_STRING_DECL(kAnonymousPasswordString, "cfnetwork@apple.com")
 #define kFTPProxyFormat			CFSTR("%@@%@")
 #define kFTPProxyWithPortFormat	CFSTR("%@@%@:%ld")
 #else
-static CONST_STRING_DECL(kFTPProxyFormat, "%@@%@")
-static CONST_STRING_DECL(kFTPProxyWithPortFormat, "%@@%@:%ld")
+CONST_STRING_DECL_LOCAL(kFTPProxyFormat, "%@@%@")
+CONST_STRING_DECL_LOCAL(kFTPProxyWithPortFormat, "%@@%@:%ld")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Method used when downloading over http
 #ifdef __CONSTANT_CFSTRINGS__
 #define kHTTPGETMethod	CFSTR("GET")
 #else
-static CONST_STRING_DECL(kHTTPGETMethod, "GET")
+CONST_STRING_DECL_LOCAL(kHTTPGETMethod, "GET")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Used to strip HTML tags from directory listings.
@@ -216,8 +215,8 @@ static CONST_STRING_DECL(kHTTPGETMethod, "GET")
 #define kHTMLTagOpen	CFSTR("<")
 #define kHTMLTagClose	CFSTR(">")
 #else
-static CONST_STRING_DECL(kHTMLTagOpen, "<")
-static CONST_STRING_DECL(kHTMLTagClose, ">")
+CONST_STRING_DECL_LOCAL(kHTMLTagOpen, "<")
+CONST_STRING_DECL_LOCAL(kHTMLTagClose, ">")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Command format strings
@@ -247,51 +246,51 @@ static CONST_STRING_DECL(kHTMLTagClose, ">")
 #define kCFFTPRNFRCommandString				CFSTR("RNFR %@\r\n")
 #define kCFFTPRNTOCommandString				CFSTR("RNTO %@\r\n")
 #else
-static CONST_STRING_DECL(kCFFTPUSERCommandString, "USER %@\r\n")
-static CONST_STRING_DECL(kCFFTPPASSCommandString, "PASS %@\r\n")
-static CONST_STRING_DECL(kCFFTPSYSTCommandString, "SYST\r\n")
-static CONST_STRING_DECL(kCFFTPSITEDIRSTYLECommandString, "SITE DIRSTYLE\r\n")
-static CONST_STRING_DECL(kCFFTPSITETRUTHCommandString, "SITE TRUTH ON\r\n")
-static CONST_STRING_DECL(kCFFTPPWDCommandString, "PWD\r\n")
-static CONST_STRING_DECL(kCFFTPTYPECommandString, "TYPE I\r\n")
-static CONST_STRING_DECL(kCFFTPPASVCommandString, "PASV\r\n")
-static CONST_STRING_DECL(kCFFTPEPSVCommandString, "EPSV\r\n")
-static CONST_STRING_DECL(kCFFTPPORTCommandString, "PORT %lu,%lu,%lu,%lu,%lu,%lu\r\n")
-static CONST_STRING_DECL(kCFFTPEPRTCommandString, "EPRT |2|%x:%x:%x:%x:%x:%x:%x:%x|%lu|\r\n")
-static CONST_STRING_DECL(kCFFTPRESTCommandString, "REST %lld\r\n")
-static CONST_STRING_DECL(kCFFTPSTATCommandString, "STAT %@\r\n")
-static CONST_STRING_DECL(kCFFTPSIZECommandString, "SIZE %@\r\n")
-static CONST_STRING_DECL(kCFFTPRETRCommandString, "RETR %@\r\n")
-static CONST_STRING_DECL(kCFFTPNLSTCommandString, "NLST %@\r\n")
-static CONST_STRING_DECL(kCFFTPCWDCommandString, "CWD %@\r\n")
-static CONST_STRING_DECL(kCFFTPLISTCommandString, "LIST\r\n")
-static CONST_STRING_DECL(kCFFTPSTORCommandString, "STOR %@\r\n")
-static CONST_STRING_DECL(kCFFTPMKDCommandString, "MKD %@\r\n")
-static CONST_STRING_DECL(kCFFTPRMDCommandString, "RMD %@\r\n")
-static CONST_STRING_DECL(kCFFTPDELECommandString, "DELE %@\r\n")
-static CONST_STRING_DECL(kCFFTPRNFRCommandString, "RNFR %@\r\n")
-static CONST_STRING_DECL(kCFFTPRNTOCommandString, "RNTO %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPUSERCommandString, "USER %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPPASSCommandString, "PASS %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPSYSTCommandString, "SYST\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPSITEDIRSTYLECommandString, "SITE DIRSTYLE\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPSITETRUTHCommandString, "SITE TRUTH ON\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPPWDCommandString, "PWD\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPTYPECommandString, "TYPE I\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPPASVCommandString, "PASV\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPEPSVCommandString, "EPSV\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPPORTCommandString, "PORT %lu,%lu,%lu,%lu,%lu,%lu\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPEPRTCommandString, "EPRT |2|%x:%x:%x:%x:%x:%x:%x:%x|%lu|\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPRESTCommandString, "REST %lld\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPSTATCommandString, "STAT %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPSIZECommandString, "SIZE %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPRETRCommandString, "RETR %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPNLSTCommandString, "NLST %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPCWDCommandString, "CWD %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPLISTCommandString, "LIST\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPSTORCommandString, "STOR %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPMKDCommandString, "MKD %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPRMDCommandString, "RMD %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPDELECommandString, "DELE %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPRNFRCommandString, "RNFR %@\r\n")
+CONST_STRING_DECL_LOCAL(kCFFTPRNTOCommandString, "RNTO %@\r\n")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Path format for combining root with url path
 #ifdef __CONSTANT_CFSTRINGS__
 #define kCFFTPPathFormatString	CFSTR("%@%@")
 #else
-static CONST_STRING_DECL(kCFFTPPathFormatString, "%@%@")
+CONST_STRING_DECL_LOCAL(kCFFTPPathFormatString, "%@%@")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Path for when only a host is given
 #ifdef __CONSTANT_CFSTRINGS__
 #define kCFFTPRootPathString	CFSTR("/")
 #else
-static CONST_STRING_DECL(kCFFTPRootPathString, "/")
+CONST_STRING_DECL_LOCAL(kCFFTPRootPathString, "/")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Path prefix indicating full path (no root)
 #ifdef __CONSTANT_CFSTRINGS__
 #define kCFFTPForcedRootPathPrefix	CFSTR("//")
 #else
-static CONST_STRING_DECL(kCFFTPForcedRootPathPrefix, "//");
+CONST_STRING_DECL_LOCAL(kCFFTPForcedRootPathPrefix, "//");
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Comparison strings for determining DIRSTYLE
@@ -299,22 +298,22 @@ static CONST_STRING_DECL(kCFFTPForcedRootPathPrefix, "//");
 #define kCFFTPWindowsNTSystemString		CFSTR("Windows_NT")
 #define kCFFTPMSDOSSystemString			CFSTR("MSDOS-like directory output is on")
 #else
-static CONST_STRING_DECL(kCFFTPWindowsNTSystemString, "Windows_NT")
-static CONST_STRING_DECL(kCFFTPMSDOSSystemString, "MSDOS-like directory output is on")
+CONST_STRING_DECL_LOCAL(kCFFTPWindowsNTSystemString, "Windows_NT")
+CONST_STRING_DECL_LOCAL(kCFFTPMSDOSSystemString, "MSDOS-like directory output is on")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Comparison string for determining TRUTH
 #ifdef __CONSTANT_CFSTRINGS__
 #define kCFFTPOSXSystemString	CFSTR("Mac OS X Server")
 #else
-static CONST_STRING_DECL(kCFFTPOSXSystemString, "Mac OS X Server")
+CONST_STRING_DECL_LOCAL(kCFFTPOSXSystemString, "Mac OS X Server")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Run loop mode for waiting for stream to open
 #ifdef __CONSTANT_CFSTRINGS__
 #define kCFFTPStreamOpenCompleted	CFSTR("_FTPStreamOpenCompleted")
 #else
-static CONST_STRING_DECL(kCFFTPStreamOpenCompleted, "_FTPStreamOpenCompleted")
+CONST_STRING_DECL_LOCAL(kCFFTPStreamOpenCompleted, "_FTPStreamOpenCompleted")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Strings used for CopyDescription function
@@ -323,16 +322,16 @@ static CONST_STRING_DECL(kCFFTPStreamOpenCompleted, "_FTPStreamOpenCompleted")
 #define kCFFTPStreamUploadDescription	CFSTR("upload")
 #define kCFFTPStreamDownloadDescription	CFSTR("download")
 #else
-static CONST_STRING_DECL(kCFFTPStreamDescriptionFormat, "<FTPStream %p>{%@, url = %@, flags = 0x%x }")
-static CONST_STRING_DECL(kCFFTPStreamUploadDescription, "upload")
-static CONST_STRING_DECL(kCFFTPStreamDownloadDescription, "download")
+CONST_STRING_DECL_LOCAL(kCFFTPStreamDescriptionFormat, "<FTPStream %p>{%@, url = %@, flags = 0x%x }")
+CONST_STRING_DECL_LOCAL(kCFFTPStreamUploadDescription, "upload")
+CONST_STRING_DECL_LOCAL(kCFFTPStreamDownloadDescription, "download")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // It's sad that this is really needed.  Used for escape sequences in URL's.
 #ifdef __CONSTANT_CFSTRINGS__
 #define kCFFTPStreamEmptyString	CFSTR("")
 #else
-static CONST_STRING_DECL(kCFFTPStreamEmptyString, "")
+CONST_STRING_DECL_LOCAL(kCFFTPStreamEmptyString, "")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 

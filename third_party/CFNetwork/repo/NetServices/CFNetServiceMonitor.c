@@ -57,7 +57,7 @@ extern Boolean _CFNetServiceSetInfoNoPublish(CFNetServiceRef theService, UInt32 
 #ifdef __CONSTANT_CFSTRINGS__
 #define _kCFNetServiceMonitorBlockingMode	CFSTR("_kCFNetServiceMonitorBlockingMode")
 #else
-static CONST_STRING_DECL(_kCFNetServiceMonitorBlockingMode, "_kCFNetServiceMonitorBlockingMode")
+CONST_STRING_DECL_LOCAL(_kCFNetServiceMonitorBlockingMode, "_kCFNetServiceMonitorBlockingMode")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 static const char _kCFNetServiceMonitorClassName[] = "CFNetServiceMonitor";

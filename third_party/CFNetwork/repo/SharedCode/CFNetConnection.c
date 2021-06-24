@@ -48,7 +48,7 @@
 #ifdef __CONSTANT_CFSTRINGS__
 #define _kCFNetConnectionDescribeFormat	CFSTR("%@:%d")
 #else
-static CONST_STRING_DECL(_kCFNetConnectionDescribeFormat, "%@:%d")
+CONST_STRING_DECL_LOCAL(_kCFNetConnectionDescribeFormat, "%@:%d")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 

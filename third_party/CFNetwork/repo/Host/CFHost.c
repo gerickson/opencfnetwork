@@ -118,8 +118,8 @@
 #define _kCFHostBlockingMode	CFSTR("_kCFHostBlockingMode")
 #define _kCFHostDescribeFormat	CFSTR("<CFHost 0x%x>{info=%@}")
 #else
-static CONST_STRING_DECL(_kCFHostBlockingMode, "_kCFHostBlockingMode")
-static CONST_STRING_DECL(_kCFHostDescribeFormat, "<CFHost 0x%x>{info=%@}")
+CONST_STRING_DECL_LOCAL(_kCFHostBlockingMode, "_kCFHostBlockingMode")
+CONST_STRING_DECL_LOCAL(_kCFHostDescribeFormat, "<CFHost 0x%x>{info=%@}")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 

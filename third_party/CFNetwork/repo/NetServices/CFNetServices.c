@@ -81,9 +81,9 @@
 #define _kCFNetServiceEmptyString			CFSTR("")
 #define _kCFNetServiceDebugFormatString		CFSTR("<CFNetService 0x%x>{domain=%@, type=%@, name=%@, specific=%@, addresses=%@}")
 #else
-static CONST_STRING_DECL(_kCFNetServiceBlockingMode, "_kCFNetServiceBlockingMode")
-static CONST_STRING_DECL(_kCFNetServiceEmptyString, "")
-static CONST_STRING_DECL(_kCFNetServiceDebugFormatString, "<CFNetService 0x%x>{domain=%@, type=%@, name=%@, specific=%@, addresses=%@}")
+CONST_STRING_DECL_LOCAL(_kCFNetServiceBlockingMode, "_kCFNetServiceBlockingMode")
+CONST_STRING_DECL_LOCAL(_kCFNetServiceEmptyString, "")
+CONST_STRING_DECL_LOCAL(_kCFNetServiceDebugFormatString, "<CFNetService 0x%x>{domain=%@, type=%@, name=%@, specific=%@, addresses=%@}")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 static const char _kCFNetServiceClassName[] = "CFNetService";
@@ -1012,7 +1012,6 @@ _RegisterReply(DNSServiceRef sdRef, DNSServiceFlags flags, DNSServiceErrorType e
 }
 
 
-#if defined(__MACH__)
 /* static */ void
 _ResolveReply(DNSServiceRef sdRef, DNSServiceFlags flags, uint32_t interfaceIndex,
 			  DNSServiceErrorType errorCode, const char* fullname, const char* hosttarget,
@@ -1095,8 +1094,12 @@ _ResolveReply(DNSServiceRef sdRef, DNSServiceFlags flags, uint32_t interfaceInde
 			service->_interface = interfaceIndex;
 			
 			/* Kick off the address lookups */
+#if defined(__MACH__)
 			_ServiceCreateQuery_NoLock(service, ns_t_a, hosttarget, NULL, NULL, TRUE);
 			_ServiceCreateQuery_NoLock(service, ns_t_aaaa, hosttarget, NULL, NULL, TRUE);
+#else
+#warning "Linux portability issue!"
+#endif
 			
 			/* If there was an error, need to mark as done */
 			if (service->_error.error) {
@@ -1155,7 +1158,6 @@ _ResolveReply(DNSServiceRef sdRef, DNSServiceFlags flags, uint32_t interfaceInde
 	/* Go ahead and release now that the callback is done. */
 	CFRelease(service);
 }
-#endif /* defined(__MACH__) */
 
 
 /* static */ void

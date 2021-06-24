@@ -107,12 +107,12 @@ CFHTTPMessageRef _CFHTTPMessageSendRequest(CFHTTPMessageRef request) {
 #define _kCFURLAccessContentLengthHeader	CFSTR("Content-Length")
 #define _kCFURLAccessContentLengthFormat	CFSTR("%d")
 #else
-static CONST_STRING_DECL(_kCFURLAccessGETMethod, "GET")
-static CONST_STRING_DECL(_kCFURLAccessHEADMethod, "HEAD")
-static CONST_STRING_DECL(_kCFURLAccessPUTMethod, "PUT")
-static CONST_STRING_DECL(_kCFURLAccessDELETEMethod, "DELETE")
-static CONST_STRING_DECL(_kCFURLAccessContentLengthHeader, "Content-Length")
-static CONST_STRING_DECL(_kCFURLAccessContentLengthFormat, "%d")
+CONST_STRING_DECL_LOCAL(_kCFURLAccessGETMethod, "GET")
+CONST_STRING_DECL_LOCAL(_kCFURLAccessHEADMethod, "HEAD")
+CONST_STRING_DECL_LOCAL(_kCFURLAccessPUTMethod, "PUT")
+CONST_STRING_DECL_LOCAL(_kCFURLAccessDELETEMethod, "DELETE")
+CONST_STRING_DECL_LOCAL(_kCFURLAccessContentLengthHeader, "Content-Length")
+CONST_STRING_DECL_LOCAL(_kCFURLAccessContentLengthFormat, "%d")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 static Boolean _CFHTTPURLCreateDataAndPropertiesFromResource(CFAllocatorRef alloc, CFURLRef url, CFDataRef *fetchedData, CFArrayRef desiredProperties, CFDictionaryRef *fetchedProperties, SInt32 *errorCode) {
@@ -399,9 +399,9 @@ static Boolean _CFFTPURLDestroyResource(CFURLRef url, SInt32 *errorCode) {
 #define _kCFURLAccessHTTPSScheme	CFSTR("https")
 #define _kCFURLAccessFTPScheme		CFSTR("ftp")
 #else
-static CONST_STRING_DECL(_kCFURLAccessHTTPScheme, "http")
-static CONST_STRING_DECL(_kCFURLAccessHTTPSScheme, "https")
-static CONST_STRING_DECL(_kCFURLAccessFTPScheme, "ftp")
+CONST_STRING_DECL_LOCAL(_kCFURLAccessHTTPScheme, "http")
+CONST_STRING_DECL_LOCAL(_kCFURLAccessHTTPSScheme, "https")
+CONST_STRING_DECL_LOCAL(_kCFURLAccessFTPScheme, "ftp")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 extern

@@ -124,12 +124,12 @@ CONST_STRING_DECL(kCFHTTPAuthenticationUsername, "kCFHTTPAuthenticationUsername"
 #define _kCFHTTPMessageHeaderProxyAuthorization			CFSTR("Proxy-Authorization")
 #define _kCFHTTPMessageHeaderAuthorization				CFSTR("Authorization")
 #else
-static CONST_STRING_DECL(_kCFHTTPMessageHeaderWWWAuthenticate, "WWW-Authenticate")
-static CONST_STRING_DECL(_kCFHTTPMessageHeaderProxyAuthenticate, "Proxy-Authenticate")
-static CONST_STRING_DECL(_kCFHTTPMessageHeaderAuthenticationInfo, "Authentication-Info")
-static CONST_STRING_DECL(_kCFHTTPMessageHeaderProxyAuthenticationInfo, "Proxy-Authentication-Info")
-static CONST_STRING_DECL(_kCFHTTPMessageHeaderProxyAuthorization, "Proxy-Authorization")
-static CONST_STRING_DECL(_kCFHTTPMessageHeaderAuthorization, "Authorization")
+CONST_STRING_DECL_LOCAL(_kCFHTTPMessageHeaderWWWAuthenticate, "WWW-Authenticate")
+CONST_STRING_DECL_LOCAL(_kCFHTTPMessageHeaderProxyAuthenticate, "Proxy-Authenticate")
+CONST_STRING_DECL_LOCAL(_kCFHTTPMessageHeaderAuthenticationInfo, "Authentication-Info")
+CONST_STRING_DECL_LOCAL(_kCFHTTPMessageHeaderProxyAuthenticationInfo, "Proxy-Authentication-Info")
+CONST_STRING_DECL_LOCAL(_kCFHTTPMessageHeaderProxyAuthorization, "Proxy-Authorization")
+CONST_STRING_DECL_LOCAL(_kCFHTTPMessageHeaderAuthorization, "Authorization")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Keys used for authentication schemes
@@ -138,9 +138,9 @@ static CONST_STRING_DECL(_kCFHTTPMessageHeaderAuthorization, "Authorization")
 #define _kCFHTTPAuthenticationPropertyAuthenticateType	CFSTR("_kCFHTTPAuthenticationPropertyAuthenticateType")
 #define kCFHTTPAuthenticationPropertyMethod				CFSTR("kCFHTTPAuthenticationPropertyMethod")
 #else
-static CONST_STRING_DECL(_kCFHTTPAuthenticationPropertyPreferredScheme, "_kCFHTTPAuthenticationPropertyPreferredScheme")
-static CONST_STRING_DECL(_kCFHTTPAuthenticationPropertyAuthenticateType, "_kCFHTTPAuthenticationPropertyAuthenticateType")
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyMethod, "kCFHTTPAuthenticationPropertyMethod")
+CONST_STRING_DECL_LOCAL(_kCFHTTPAuthenticationPropertyPreferredScheme, "_kCFHTTPAuthenticationPropertyPreferredScheme")
+CONST_STRING_DECL_LOCAL(_kCFHTTPAuthenticationPropertyAuthenticateType, "_kCFHTTPAuthenticationPropertyAuthenticateType")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyMethod, "kCFHTTPAuthenticationPropertyMethod")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 // Values for the Method prop.  Note we will use these as atoms (tested for with ==) when they are
@@ -169,37 +169,37 @@ CONST_STRING_DECL(kCFHTTPAuthenticationSchemeNTLM, "NTLM")
 #define kCFHTTPAuthenticationPropertyNegotiateAuthData	CFSTR("Auth-Data")
 #define kCFHTTPAuthenticationComma						CFSTR(",")
 #else
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyRealm, "Realm")
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyDomain, "Domain")
-static CONST_STRING_DECL(_kCFHTTPAuthenticationPropertyDigestStale, "Stale")
-static CONST_STRING_DECL(_kCFHTTPAuthenticationDigestStaleTrue, "True")
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyDigestNonce, "Nonce")
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyDigestNextNonce, "Nextnonce")
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyDigestNonceCount, "Nc")
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyDigestQop, "Qop")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestQopAuth, "auth")
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyDigestCNonce, "Cnonce")
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyDigestOpaque, "Opaque")
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyDigestAlgorithm, "Algorithm")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestAlgorithmMD5, "MD5")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestAlgorithmMD5Session, "MD5-sess")
-static CONST_STRING_DECL(kCFHTTPAuthenticationPropertyNegotiateAuthData, "Auth-Data")
-static CONST_STRING_DECL(kCFHTTPAuthenticationComma, ",")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyRealm, "Realm")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyDomain, "Domain")
+CONST_STRING_DECL_LOCAL(_kCFHTTPAuthenticationPropertyDigestStale, "Stale")
+CONST_STRING_DECL_LOCAL(_kCFHTTPAuthenticationDigestStaleTrue, "True")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyDigestNonce, "Nonce")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyDigestNextNonce, "Nextnonce")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyDigestNonceCount, "Nc")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyDigestQop, "Qop")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestQopAuth, "auth")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyDigestCNonce, "Cnonce")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyDigestOpaque, "Opaque")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyDigestAlgorithm, "Algorithm")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestAlgorithmMD5, "MD5")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestAlgorithmMD5Session, "MD5-sess")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationPropertyNegotiateAuthData, "Auth-Data")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationComma, ",")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 #ifdef __CONSTANT_CFSTRINGS__
 #define kHTTPAuthenticationUndecidedMethodDescription				CFSTR("<undecided>")
 #define kHTTPAuthenticationDescriptionFormat	CFSTR("<CFHTTPAuthentication 0x%x>{state = %s; scheme = %@, forProxy = %s}")
 #else
-static CONST_STRING_DECL(kHTTPAuthenticationUndecidedMethodDescription, "<undecided>")
-static CONST_STRING_DECL(kHTTPAuthenticationDescriptionFormat, "<CFHTTPAuthentication 0x%x>{state = %s; scheme = %@, forProxy = %s}")
+CONST_STRING_DECL_LOCAL(kHTTPAuthenticationUndecidedMethodDescription, "<undecided>")
+CONST_STRING_DECL_LOCAL(kHTTPAuthenticationDescriptionFormat, "<CFHTTPAuthentication 0x%x>{state = %s; scheme = %@, forProxy = %s}")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 	
 // Basic authentication strings
 #ifdef __CONSTANT_CFSTRINGS__
 #define kCFHTTPAuthenticationBasicFormat		CFSTR("Basic %@")
 #else
-static CONST_STRING_DECL(kCFHTTPAuthenticationBasicFormat, "Basic %@")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationBasicFormat, "Basic %@")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 						 
 // Digest authentication strings
@@ -217,18 +217,18 @@ static CONST_STRING_DECL(kCFHTTPAuthenticationBasicFormat, "Basic %@")
 #define kCFHTTPAuthenticationDigestHeaderAlgorithmFormat	CFSTR(", algorithm=\"%@\"")
 #define kCFHTTPAuthenticationDigestHeaderNoncesFormat		CFSTR(", cnonce=\"%@\", nc=%08lx, qop=\"%@\"")
 #else
-static CONST_STRING_DECL(kCFHTTPAuthenticationHTTPSScheme, "https")
-static CONST_STRING_DECL(kCFHTTPAuthenticationCONNECTMethod, "CONNECT")
-static CONST_STRING_DECL(kCFHTTPAuthenticationHostPortFormat, "%@:%d")
-static CONST_STRING_DECL(kCFHTTPAuthenticationMD5HashFormat, "%lx")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestHashA1Format, "%@:%@:%@")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestHashA2NoQopFormat, "%@:%@")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestHashFormat, "%@:%@:%@")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestHashQopFormat, "%@:%@:%08lx:%@:%@:%@")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestHeaderFormat, "%@ username=\"%@\", realm=\"%@\", nonce=\"%@\", uri=\"%@\", response=\"%@\"")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestHeaderOpaqueFormat, ", opaque=\"%@\"")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestHeaderAlgorithmFormat, ", algorithm=\"%@\"")
-static CONST_STRING_DECL(kCFHTTPAuthenticationDigestHeaderNoncesFormat, ", cnonce=\"%@\", nc=%08lx, qop=\"%@\"")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationHTTPSScheme, "https")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationCONNECTMethod, "CONNECT")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationHostPortFormat, "%@:%d")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationMD5HashFormat, "%lx")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestHashA1Format, "%@:%@:%@")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestHashA2NoQopFormat, "%@:%@")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestHashFormat, "%@:%@:%@")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestHashQopFormat, "%@:%@:%08lx:%@:%@:%@")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestHeaderFormat, "%@ username=\"%@\", realm=\"%@\", nonce=\"%@\", uri=\"%@\", response=\"%@\"")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestHeaderOpaqueFormat, ", opaque=\"%@\"")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestHeaderAlgorithmFormat, ", algorithm=\"%@\"")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationDigestHeaderNoncesFormat, ", cnonce=\"%@\", nc=%08lx, qop=\"%@\"")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 						 
 #ifdef __CONSTANT_CFSTRINGS__
@@ -236,9 +236,9 @@ static CONST_STRING_DECL(kCFHTTPAuthenticationDigestHeaderNoncesFormat, ", cnonc
 #define kCFHTTPAuthenticationNegotiateNTLMFormat		CFSTR("NTLM %@")
 #define kCFHTTPAuthenticationNTLMDomainUserSeparator	CFSTR("\\")
 #else
-static CONST_STRING_DECL(kCFHTTPAuthenticationNegotiateNegotiateFormat, "Negotiate %@")
-static CONST_STRING_DECL(kCFHTTPAuthenticationNegotiateNTLMFormat, "NTLM %@")
-static CONST_STRING_DECL(kCFHTTPAuthenticationNTLMDomainUserSeparator, "\\")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationNegotiateNegotiateFormat, "Negotiate %@")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationNegotiateNTLMFormat, "NTLM %@")
+CONST_STRING_DECL_LOCAL(kCFHTTPAuthenticationNTLMDomainUserSeparator, "\\")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 						 
