@@ -170,4 +170,19 @@ dist-hook: $(distdir)/.dist-version
 docdist: $(BUILT_SOURCES)
 	$(MAKE) -C doc docdistdir=$(abs_builddir) $(@)
 
+#
+# Data file for pkg-config
+#
+
+pkgconfigdir			= ${libdir}/pkgconfig
+pkgconfig_DATA			= CFNetwork.pc
+
+# A hook for the 'uninstall' target to ensure that directories this
+# package creates or that this package populates during the 'install'
+# target are removed, if empty (that is, this package is the "last one
+# out").
+
+uninstall-hook:
+	-rmdir ${DESTDIR}${pkgconfigdir}
+
 include $(abs_top_nlbuild_autotools_dir)/automake/post.am
