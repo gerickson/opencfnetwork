@@ -1,0 +1,14 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+datarootdir=@datarootdir@
+datadir=@datadir@
+includedir=@includedir@
+
+Name: @PACKAGE_NAME@
+Version: @PACKAGE_VERSION@
+Description: A portable version of Apple's iOS/iPadOS/macOS/tvOS/watchOS CFNetwork library.
+URL: @PACKAGE_URL@
+Cflags: -I${includedir}
+Libs: -L${libdir} -lCFNetwork
+Libs.private: @LIBS@
