@@ -408,7 +408,9 @@ static Boolean _SocketStreamAttemptNextConnection_NoLock(_CFSocketStreamContext*
 
 static Boolean _SocketStreamCan(_CFSocketStreamContext* ctxt, CFTypeRef stream, int test, CFStringRef mode, CFStreamError* error);
 
+#if defined(__MACH__)
 static void _SocketStreamAddReachability_NoLock(_CFSocketStreamContext* ctxt);
+#endif
 static void _SocketStreamRemoveReachability_NoLock(_CFSocketStreamContext* ctxt);
 
 static CFComparisonResult _OrderHandshakes(_CFSocketStreamPerformHandshakeCallBack fn1, _CFSocketStreamPerformHandshakeCallBack fn2, void* context);
@@ -479,13 +481,17 @@ static Boolean _CONNECTSetInfo_NoLock(_CFSocketStreamContext* ctxt, CFDictionary
 
 static OSStatus _SecurityReadFunc_NoLock(_CFSocketStreamContext* ctxt, void* data, UInt32* dataLength);
 static OSStatus _SecurityWriteFunc_NoLock(_CFSocketStreamContext* ctxt, const void* data, UInt32* dataLength);
+#if defined(__MACH__)
 static CFIndex _SocketStreamSecuritySend_NoLock(_CFSocketStreamContext* ctxt, const UInt8* buffer, CFIndex length);
+#endif
 static void _SocketStreamSecurityBufferedRead_NoLock(_CFSocketStreamContext* ctxt);
 static void _PerformSecurityHandshake_NoLock(_CFSocketStreamContext* ctxt);
 static void _PerformSecuritySendHandshake_NoLock(_CFSocketStreamContext* ctxt);
 static void _SocketStreamSecurityClose_NoLock(_CFSocketStreamContext* ctxt);
 static Boolean _SocketStreamSecuritySetContext_NoLock(_CFSocketStreamContext *ctxt, CFDataRef value);
+#if defined(__MACH__)
 static Boolean _SocketStreamSecuritySetInfo_NoLock(_CFSocketStreamContext* ctxt, CFDictionaryRef settings);
+#endif
 static Boolean _SocketStreamSecuritySetAuthenticatesServerCertificates_NoLock(_CFSocketStreamContext* ctxt, CFBooleanRef authenticates);
 #if defined(__MACH__)
 static CFStringRef _SecurityGetProtocol(SSLContextRef security);
@@ -950,12 +956,14 @@ _SocketStreamCanRead(CFReadStreamRef stream, _CFSocketStreamContext* ctxt) {
 			/* Unlock */
 			__CFSpinUnlock(&ctxt->_lock);
 		}
-		
+
 		/* If none there, check to see if there are encrypted bytes that are buffered. */
 		else if (__CFBitIsSet(ctxt->_flags, kFlagBitUseSSL)) {
 			
+#if defined(__MACH__)
 			_SocketStreamSecurityBufferedRead_NoLock(ctxt);
 			result = __CFBitIsSet(ctxt->_flags, kFlagBitCanRead) || __CFBitIsSet(ctxt->_flags, kFlagBitClosed);
+#endif
 			
 			/* Unlock */
 			__CFSpinUnlock(&ctxt->_lock);
@@ -1078,9 +1086,11 @@ _SocketStreamWrite(CFWriteStreamRef stream, const UInt8* buffer, CFIndex bufferL
 		/* If there's no error, try to write now. */
 		if (!ctxt->_error.error) {
 		
+#if defined(__MACH__)
 			if (__CFBitIsSet(ctxt->_flags, kFlagBitUseSSL))
 				result = _SocketStreamSecuritySend_NoLock(ctxt, buffer, bufferLength);
 			else
+#endif /* defined(__MACH__)  */
 				result = _CFSocketSend(ctxt->_socket, buffer, bufferLength, &ctxt->_error);
 		}
 		
@@ -1425,7 +1435,8 @@ _SocketStreamSetProperty(CFTypeRef stream, CFStringRef propertyName, CFTypeRef p
 		
 		result = TRUE;
 	}
-	
+
+#if defined(__MACH__)	
 	else if (CFEqual(propertyName, kCFStreamPropertyAutoErrorOnSystemChange)) {
 		
 		if (!propertyValue) {
@@ -1446,6 +1457,7 @@ _SocketStreamSetProperty(CFTypeRef stream, CFStringRef propertyName, CFTypeRef p
 		
 		result = TRUE;
 	}
+#endif /* defined(__MACH__) */
 	
     else if (CFEqual(propertyName, _kCFStreamSocketCreatedCallBack)) {
 		
@@ -1500,7 +1512,6 @@ _SocketStreamSetProperty(CFTypeRef stream, CFStringRef propertyName, CFTypeRef p
 #if defined(__MACH__)	
 	else if (CFEqual(propertyName, kCFStreamPropertySocketSSLContext))
 		result = _SocketStreamSecuritySetContext_NoLock(ctxt, propertyValue);
-#endif /* defined(__MACH__) */
 	
     else if (CFEqual(propertyName, kCFStreamPropertySSLSettings)) {
 
@@ -1515,7 +1526,6 @@ _SocketStreamSetProperty(CFTypeRef stream, CFStringRef propertyName, CFTypeRef p
 		}
     }
 
-#if defined(__MACH__)
 	else if (CFEqual(propertyName, _kCFStreamPropertySocketSecurityAuthenticatesServerCertificate)) {
 		
 		result = TRUE;
@@ -1681,9 +1691,11 @@ _SocketCallBack(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, con
 			case kCFSocketConnectCallBack:
 				
 				if (!data) {
-					
+
+#if defined(__MACH__)
 					/* See if the client has turned off the error detection. */
 					CFBooleanRef reach = (CFBooleanRef)CFDictionaryGetValue(ctxt->_properties, kCFStreamPropertyAutoErrorOnSystemChange);
+#endif /* defined(__MACH__) */
 				
 					/* Mark as open. */
 					__CFBitClear(ctxt->_flags, kFlagBitOpenStarted);
@@ -1696,9 +1708,11 @@ _SocketCallBack(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, con
 					rStream = ctxt->_clientReadStream;
 					wStream = ctxt->_clientWriteStream;
 					
+#if defined(__MACH__)
 					/* Create and schedule reachability on this socket. */
 					if (!reach || (reach != kCFBooleanFalse))
 						_SocketStreamAddReachability_NoLock(ctxt);
+#endif /* defined(__MACH__) */
 				}
 				
 				else {
@@ -1743,10 +1757,12 @@ _SocketCallBack(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, con
 				/* Buffered reading has special code. */
 				else if (__CFBitIsSet(ctxt->_flags, kFlagBitIsBuffered)) {
 					
+#if defined(__MACH__)
 					/* Call the buffered read stuff for SSL */
 					if (__CFBitIsSet(ctxt->_flags, kFlagBitUseSSL))
 						_SocketStreamSecurityBufferedRead_NoLock(ctxt);
 					else
+#endif /* defined(__MACH__) */
 						_SocketStreamBufferedSocketRead_NoLock(ctxt);
 					
 					/* If that set the "can read" bit, set the event. */
@@ -3657,11 +3673,13 @@ _SocketStreamBufferedRead_NoLock(_CFSocketStreamContext* ctxt, UInt8* buffer, CF
 		
 		/* Zero the bytes at the end of the local buffer */
 		memset(ptr + *i, 0, max - *i);
-		
+
+#if defined(__MACH__)		
 		/* If the local buffer is empty, pump SSL along. */
 		if (__CFBitIsSet(ctxt->_flags, kFlagBitUseSSL) && (*i == 0)) {
 			_SocketStreamSecurityBufferedRead_NoLock(ctxt);
 		}
+#endif
 	}
 	
 	/* If no bytes read and the pipe isn't closed, constitute an EAGAIN */
@@ -3802,13 +3820,17 @@ _OrderHandshakes(_CFSocketStreamPerformHandshakeCallBack fn1, _CFSocketStreamPer
 	
 	if (*fn1 == _PerformCONNECTHandshake_NoLock) return kCFCompareLessThan;
 	if (*fn2 == _PerformCONNECTHandshake_NoLock) return kCFCompareGreaterThan;
-	
+
+#if defined(__MACH__)
 	if (*fn1 == _PerformSecuritySendHandshake_NoLock) return kCFCompareLessThan;
 	if (*fn2 == _PerformSecuritySendHandshake_NoLock) return kCFCompareGreaterThan;
-	
+#endif
+
+#if defined(__MACH__)	
 	if (*fn1 == _PerformSecurityHandshake_NoLock) return kCFCompareLessThan;
 	if (*fn2 == _PerformSecurityHandshake_NoLock) return kCFCompareGreaterThan;
-	
+#endif	
+
 	return kCFCompareEqualTo;
 }
 
@@ -3922,7 +3944,8 @@ _SocketStreamRemoveHandshake_NoLock(_CFSocketStreamContext* ctxt, _CFSocketStrea
 				if (ctxt->_clientReadStream && __CFBitIsSet(ctxt->_flags, kFlagBitReadStreamOpened))
 					_CFReadStreamSignalEventDelayed(ctxt->_clientReadStream, kCFStreamEventHasBytesAvailable, &error);
 			}
-			
+
+#if defined(__MACH__)			
 			/* If none there, check to see if there are encrypted bytes that are buffered. */
 			else if (__CFBitIsSet(ctxt->_flags, kFlagBitUseSSL)) {
 				
@@ -3939,6 +3962,7 @@ _SocketStreamRemoveHandshake_NoLock(_CFSocketStreamContext* ctxt, _CFSocketStrea
 					}
 				}
 			}
+#endif /* defined(__MACH__) */
 		}
 		
 		CFSocketEnableCallBacks(ctxt->_socket, kCFSocketReadCallBack | kCFSocketWriteCallBack);
