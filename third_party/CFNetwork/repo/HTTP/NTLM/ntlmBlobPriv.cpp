@@ -47,7 +47,9 @@
  * Private routines used by NtlmGenerator module. 
  */
 #include "ntlmBlobPriv.h"
+#if defined(__MACH__)
 #include <CoreServices/CoreServices.h>
+#endif
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
@@ -58,11 +60,15 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <strings.h>
+#include <string.h>
+#if defined(__MACH__)
 #include <CommonCrypto/CommonDigest.h>
 #include <Security/cssmapi.h>
 #include <Security/cssmapple.h>
+#endif
 #include <CoreFoundation/CFDate.h>
 
+#if defined(__MACH__)
 #if		DEBUG_FIXED_CHALLENGE
 /* Fixed 64-bit timestamp for sourceforge test vectors */
 static unsigned char dbgStamp[] = 
@@ -619,4 +625,4 @@ OSStatus ntlmResponse(
 	}
 	return ortn;
 }
-
+#endif /* defined(__MACH__) */

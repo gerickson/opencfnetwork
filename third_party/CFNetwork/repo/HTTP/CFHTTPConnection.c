@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include "CFNetwork/CFSocketStreamPriv.h"
 
 const SInt32 kCFStreamErrorHTTPConnectionLost = -4;
 
@@ -794,24 +795,28 @@ static void grabReadStreamProperties(_CFHTTPStreamInfo *streamInfo, CFReadStream
 	if (!streamInfo->peerCertificates) {
 		streamInfo->peerCertificates = (CFArrayRef)CFReadStreamCopyProperty(stream, kCFStreamPropertySSLPeerCertificates);
 	}
+#if defined(__MACH__)
 	if (!streamInfo->clientCertificates) {
 		streamInfo->clientCertificates = (CFArrayRef)CFReadStreamCopyProperty(stream, _kCFStreamPropertySSLClientCertificates);
 	}
 	if (!streamInfo->clientCertificateState) {
 		streamInfo->clientCertificateState = (CFNumberRef)CFReadStreamCopyProperty(stream, _kCFStreamPropertySSLClientCertificateState);
 	}
+#endif /* defined(__MACH__) */
 }
 
 static void grabWriteStreamProperties(_CFHTTPStreamInfo *streamInfo, CFWriteStreamRef stream) {
 	if (!streamInfo->peerCertificates) {
 		streamInfo->peerCertificates = (CFArrayRef)CFWriteStreamCopyProperty(stream, kCFStreamPropertySSLPeerCertificates);
 	}
+#if defined(__MACH__)
 	if (!streamInfo->clientCertificates) {
 		streamInfo->clientCertificates = (CFArrayRef)CFWriteStreamCopyProperty(stream, _kCFStreamPropertySSLClientCertificates);
 	}
 	if (!streamInfo->clientCertificateState) {
 		streamInfo->clientCertificateState = (CFNumberRef)CFWriteStreamCopyProperty(stream, _kCFStreamPropertySSLClientCertificateState);
 	}
+#endif /* defined(__MACH__) */
 }
 
 static void httpConnectionResponseStreamCB(void *request, CFReadStreamRef stream, CFStreamEventType eventType, _CFNetConnectionRef conn, const void *info) {
@@ -1169,7 +1174,9 @@ static CFTypeRef httpStreamCopyProperty(CFReadStreamRef stream, CFStringRef prop
 				}
 			}
 		}
-	} else if (CFEqual(propertyName, _kCFStreamPropertySSLClientCertificates)) {
+	} 
+#if defined(__MACH__)
+    else if (CFEqual(propertyName, _kCFStreamPropertySSLClientCertificates)) {
 		if (streamInfo->clientCertificates)
 			property = CFRetain(streamInfo->clientCertificates);
 		else if (streamInfo->conn) {
@@ -1199,7 +1206,9 @@ static CFTypeRef httpStreamCopyProperty(CFReadStreamRef stream, CFStringRef prop
 				}
 			}
 		}
-    } else if (CFEqual(propertyName, kCFStreamPropertyHTTPRequestBytesWrittenCount)) {
+    }
+#endif /* defined(__MACH__) */
+    else if (CFEqual(propertyName, kCFStreamPropertyHTTPRequestBytesWrittenCount)) {
         property = CFNumberCreate(CFGetAllocator(stream), kCFNumberLongLongType, &(streamInfo->requestBytesWritten));
     } else if (CFEqual(propertyName, _kCFStreamPropertyHTTPConnection)) {
         property = streamInfo->conn;

@@ -30,12 +30,15 @@
 #define _SPNEGO_KRB_H_
 
 //#include "spnegoTool.h"
+#if defined(__MACH__)
 #include <Kerberos/krb5.h>		/* just for krb5_error_code */
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#if defined(__MACH__)
 krb5_error_code GetSvcTicketForHost(const char *inHostname,
 									const char *inServiceType,
 									unsigned *outTicketLen,
@@ -51,6 +54,7 @@ krb5_error_code krbGetSvcTkt(
 	unsigned *tktLen,		// RETURNED
 	int *isLoggedIn);		// RETURNED: nonzero means the user
                                         // has a valid TGT
+#endif /* defined(__MACH__) */
 
 #ifdef __cplusplus
 }

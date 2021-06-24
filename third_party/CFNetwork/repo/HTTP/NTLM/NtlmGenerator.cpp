@@ -55,14 +55,19 @@
 
 #include "NtlmGenerator.h"
 #include "ntlmBlobPriv.h"
+#if defined(__MACH__)
 #include <CoreServices/CoreServices.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <strings.h>
+#if defined(__MACH__)
 #include <security_cdsa_utils/cuCdsaUtils.h>
+#endif
 
+#if defined(__MACH__)
 /* 
  * For debugging using fixed server challenge and client nonce. 
  */
@@ -755,4 +760,4 @@ OSStatus NtlmGeneratePasswordHashes(
 	
 	return result;
 }
-
+#endif /* defined(__MACH__) */

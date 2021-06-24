@@ -47,13 +47,16 @@
 #ifndef	_SPNEGO_DER_H_
 #define _SPNEGO_DER_H_
 
+#if defined(__MACH__)
 #include <Security/secasn1t.h>
 #include <Security/cssmtype.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#if defined(__MACH__)
 /***
 Ê*** ASN and OID definitions from Microsoft:
  *** http://msdn.microsoft.com/library/
@@ -154,6 +157,7 @@ typedef struct {
 } SpnegoNegTokenTarg;
 
 extern const SecAsn1Template SpnegoNegTokenTargTemplate[];
+#endif /* defined(__MACH__) */
 
 #ifdef __cplusplus
 }

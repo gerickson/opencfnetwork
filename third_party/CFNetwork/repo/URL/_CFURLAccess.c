@@ -33,6 +33,8 @@
 #include <CFNetwork/CFFTPStream.h>
 #include <CFNetwork/CFFTPStreamPriv.h>
 
+#include "CFNetworkInternal.h"
+
 // Internal prototypes.  What does it mean that these functions are exported from
 // CFNetwork, but not used in any other file, or present in any header file? ¥DCJ¥
 CFNetwork_EXPORT

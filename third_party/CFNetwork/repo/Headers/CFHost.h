@@ -54,9 +54,6 @@
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
-
-
-
 #include <AvailabilityMacros.h>
 
 #if PRAGMA_ONCE
@@ -73,6 +70,10 @@ extern "C" {
     #pragma enumsalwaysint on
 #endif
 
+#define CALLBACK_API(_type, _name)              _type ( * _name)
+#define CALLBACK_API_C(_type, _name)            _type ( * _name)
+#define CALLBACK_API_STDCALL(_type, _name)      _type ( * _name)
+#define CALLBACK_API_C_STDCALL(_type, _name)    _type ( * _name)
 
 /*
  *  CFHostRef

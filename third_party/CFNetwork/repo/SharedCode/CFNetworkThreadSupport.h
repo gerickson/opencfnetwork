@@ -87,6 +87,33 @@ CF_INLINE void __CFSpinUnlock(CFSpinLock_t *lock) {
     *lock = 0;
 }
 
+#elif defined(__linux__)
+
+#include <pthread.h>					// For spin_lock stuff below
+#include <unistd.h>
+
+// This is aligned with the definitions found in CFInternal.h in OpenCFLite.
+
+typedef struct __CFSpinLock {
+	int init;
+	pthread_spinlock_t lock;
+} CFSpinLock_t;
+
+#define CFSpinLockInit {0}
+#define CF_SPINLOCK_INIT_FOR_STRUCTS(X) do { pthread_spin_init(&X.lock, PTHREAD_PROCESS_PRIVATE); X.init = 1; } while (0)
+
+CF_INLINE void __CFSpinLock(CFSpinLock_t *lockp) {
+	if (lockp->init == 0) {
+		!pthread_spin_init(&lockp->lock, PTHREAD_PROCESS_PRIVATE) &&
+		(lockp->init = 1);
+	}
+	pthread_spin_lock(&lockp->lock);
+}
+
+CF_INLINE void __CFSpinUnlock(CFSpinLock_t *lockp) {
+	pthread_spin_unlock(&lockp->lock);
+}
+
 #else
 
 #warning CF spin locks not defined for this platform -- CF is not thread-safe

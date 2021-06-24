@@ -37,8 +37,9 @@
 #include "CFNetworkSchedule.h"
 
 #include <dns_sd.h>
+#if defined(__MACH__)
 #include <nameser.h>
-
+#endif
 
 #if 0
 #pragma mark -
@@ -566,8 +567,10 @@ CFNetServiceMonitorStart(CFNetServiceMonitorRef theMonitor, CFNetServiceMonitorT
 		
 		/* If it's the TXT monitor type, set up rrtype and rrclass correctly. */
 		if (recordType == kCFNetServiceMonitorTXT) {
+#if defined(__MACH__)
 			rrtype = ns_t_txt;
 			rrclass = ns_c_in;
+#endif
 		}
 		
 		/* Get the raw data for the properties to send down to mdns */

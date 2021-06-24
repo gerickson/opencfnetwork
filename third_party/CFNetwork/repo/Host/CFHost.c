@@ -82,8 +82,12 @@
 
 #include <math.h>										/* for fabs */
 #include <sys/socket.h>
+#if defined(__MACH__)
 #include <netdb_async.h>
 #include <SystemConfiguration/SystemConfiguration.h>	/* for SCNetworkReachability and flags */
+#elif defined(__linux__)
+#include <netdb.h>
+#endif
 
 
 #if 0
@@ -161,24 +165,33 @@ static Boolean _HostBlockUntilComplete(_CFHost* host);
 
 static Boolean _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176);
 
+#if defined(__MACH__)
 static CFMachPortRef _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
+#endif
 static CFTypeRef _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStreamError* error);
+#if defined(__MACH__)
 static CFMachPortRef _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error);
 static SCNetworkReachabilityRef _CreateReachabilityLookup(CFTypeRef thing, void* context, CFStreamError* error);
 static CFMachPortRef _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamError* error);
+#endif /* #if defined(__MACH__) */
 
 static void _GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt);
+#if defined(__MACH__)
 static void _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
-
+#endif
 static void _GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt);
+#if defined(__MACH__)
 static void _GetNameInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
-
+#endif
+#if defined(__MACH__)
 static void _NetworkReachabilityCallBack(SCNetworkReachabilityRef target, SCNetworkConnectionFlags flags, void* ctxt);
+#endif
 static void _NetworkReachabilityByIPCallBack(_CFHost* host);
 
 static void _DNSCallBack(int32_t status, char *buf, uint32_t len, struct sockaddr *from, int fromlen, void *context);
+#if defined(__MACH__)
 static void _DNSMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
-
+#endif
 static void _MasterCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamError *error, CFStringRef name);
 static void _AddressLookupSchedule_NoLock(_CFHost* host, CFRunLoopRef rl, CFStringRef mode);
 static void _AddressLookupPerform(_CFHost* host);
@@ -530,6 +543,7 @@ _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176)
 			if (addr) host->_lookup = _CreateNameLookup(addr, host, &(host->_error));
 			break;
 
+#if defined(__MACH__)
 		// Create a reachability check using the address or name (prefers address).
 		case kCFHostReachability:
 			{
@@ -614,6 +628,7 @@ _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176)
 				}
 			}
 			break;
+#endif /* #if defined(__MACH__) */
 		
 		case 0x0000FFFC /* _kCFHostMasterAddressLookup */:
 			host->_lookup = _CreateMasterAddressLookup(name, info, host, &(host->_error));
@@ -656,7 +671,7 @@ _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176)
 	return result;
 }
 
-
+#if defined(__MACH__)
 /* static */ CFMachPortRef
 _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
 	
@@ -749,7 +764,7 @@ _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef cont
 	
 	return result;
 }
-
+#endif /* #if defined(__MACH__) */
 
 /* static */ CFTypeRef
 _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStreamError* error) {
@@ -879,7 +894,7 @@ _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStr
 	return result;
 }
 
-
+#if defined(__MACH__)
 /* static */ CFMachPortRef
 _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
 	
@@ -925,7 +940,6 @@ _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
 	// Return the CFMachPortRef
 	return result;
 }
-
 
 /* static */ SCNetworkReachabilityRef
 _CreateReachabilityLookup(CFTypeRef thing, void* context, CFStreamError* error) {
@@ -1001,7 +1015,6 @@ _CreateReachabilityLookup(CFTypeRef thing, void* context, CFStreamError* error) 
 	
 	return result;
 }
-
 
 /* static */ CFMachPortRef
 _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamError* error) {
@@ -1081,7 +1094,6 @@ _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamEr
 	return result;
 }
 
-
 /* static */ void
 _GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt) {
 
@@ -1152,7 +1164,14 @@ _GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt) {
 						continue;
 					
 					// Wrap the address in a CFData
+#if defined(__MACH__)
 					data = CFDataCreate(allocator, (UInt8*)(i->ai_addr), i->ai_addr->sa_len);
+#else
+					if (i->ai_addr->sa_family == AF_INET)
+						data = CFDataCreate(allocator, (UInt8*)(i->ai_addr), sizeof(struct sockaddr_in));
+					else if (i->ai_addr->sa_family == AF_INET6)
+						data = CFDataCreate(allocator, (UInt8*)(i->ai_addr), sizeof(struct sockaddr_in6));
+#endif /* defined(__MACH__) */
 					
 					// Fail with a memory error if the address wouldn't wrap.
 					if (!data) {
@@ -1219,13 +1238,11 @@ _GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt) {
 	CFRelease((CFHostRef)host);	
 }
 
-
 /* static */ void
 _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info) {
 	
 	getaddrinfo_async_handle_reply(msg);
 }
-
 
 /* static */ void
 _GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt) {
@@ -1334,13 +1351,11 @@ _GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt) {
 	CFRelease((CFHostRef)host);
 }
 
-
 /* static */ void
 _GetNameInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info) {
 	
 	getnameinfo_async_handle_reply(msg);
 }
-
 
 /* static */ void
 _NetworkReachabilityCallBack(SCNetworkReachabilityRef target, SCNetworkConnectionFlags flags, void* ctxt) {
@@ -1407,7 +1422,7 @@ _NetworkReachabilityCallBack(SCNetworkReachabilityRef target, SCNetworkConnectio
 	// Go ahead and release now that the callback is done.
 	CFRelease((CFHostRef)host);
 }
-
+#endif /* #if defined(__MACH__) */
 
 /* static */ void
 _NetworkReachabilityByIPCallBack(_CFHost* host) {
@@ -1456,7 +1471,7 @@ _NetworkReachabilityByIPCallBack(_CFHost* host) {
 	CFRelease((CFHostRef)host);
 }
 
-
+#if defined(__MACH__)
 /* static */ void
 _DNSCallBack(int32_t status, char *buf, uint32_t len, struct sockaddr *from, int fromlen, void *context) {
 	
@@ -1571,13 +1586,12 @@ _DNSCallBack(int32_t status, char *buf, uint32_t len, struct sockaddr *from, int
 	CFRelease((CFHostRef)context);
 }
 
-
 /* static */ void
 _DNSMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info) {
 	
 	dns_async_handle_reply(msg);
 }
-
+#endif /* #if defined(__MACH__) */
 
 /* static */ void
 _MasterCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamError *error, CFStringRef name) {

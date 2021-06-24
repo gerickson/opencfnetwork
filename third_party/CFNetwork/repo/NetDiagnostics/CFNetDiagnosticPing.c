@@ -41,7 +41,9 @@
 #include <sys/socket.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
+#if defined(__MACH__)
 #include <netinet/ip_var.h>
+#endif
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>

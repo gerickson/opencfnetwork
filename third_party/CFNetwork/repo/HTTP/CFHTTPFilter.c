@@ -161,7 +161,7 @@ static void *httpRdFilterCreate(CFReadStreamRef stream, void *info) {
     _CFHTTPFilter *filter = (_CFHTTPFilter *)CFAllocatorAllocate(CFGetAllocator(stream), sizeof(_CFHTTPFilter), 0);
     filter->header = oldFilter->header;
     CFRetain(filter->header);
-	filter->lock = 0;
+	CF_SPINLOCK_INIT_FOR_STRUCTS(filter->lock);
     filter->flags = oldFilter->flags;
     filter->expectedBytes = HEADERS_NOT_YET_CHECKED;
     filter->processedBytes = 0;
@@ -1384,7 +1384,7 @@ CFReadStreamRef CFReadStreamCreateHTTPStream(CFAllocatorRef alloc, CFReadStreamR
 static void *httpWrFilterCreate(CFWriteStreamRef stream, void *info) {
     _CFHTTPFilter *oldFilter = (_CFHTTPFilter *)info;
     _CFHTTPFilter *filter = (_CFHTTPFilter *)CFAllocatorAllocate(CFGetAllocator(stream), sizeof(_CFHTTPFilter), 0);
-	filter->lock = 0;
+	CF_SPINLOCK_INIT_FOR_STRUCTS(filter->lock);
     filter->header = NULL;
     filter->flags = 0;
     if (__CFBitIsSet(oldFilter->flags, IS_PROXY)) {

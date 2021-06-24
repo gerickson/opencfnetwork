@@ -27,12 +27,18 @@
  */
  
 #include "spnegoKrb.h"
+#if defined(__MACH__)
 #include <Kerberos/Kerberos.h>
+#endif
 #include <stdio.h>
 //#include "unBER.h"
 #include "CFNetworkInternal.h"
+#if defined(__MACH__)
 #include <mach-o/dyld.h>
+#endif
 #include "spnegoDER.h"
+
+#if defined(__MACH__)
 
 #ifndef DYNAMICALLY_LOAD_KERBEROS
 #define DYNAMICALLY_LOAD_KERBEROS 1
@@ -45,7 +51,6 @@ static const void* KerberosLibrary = NULL;
 static int returns_bad_int_return(void) { return 1; }
 static void returns(void) { return; }
 
-
 #define GET_DYNAMIC_SYMBOL(sym, rettype, arglist, alt)													\
     static rettype (* sym##_proc)arglist = NULL;														\
     if (sym##_proc == NULL) {																\
@@ -54,7 +59,6 @@ static void returns(void) { return; }
         if (! sym##_proc) sym##_proc = (rettype(*)arglist)alt;									\
     }
     
-
 krb5_error_code KRB5_CALLCONV
 krb5_init_context(krb5_context *ctxt) {
 
@@ -251,4 +255,4 @@ out:
 	
 	return kerr;
 }
-
+#endif /* defined(__MACH__) */

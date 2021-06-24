@@ -38,12 +38,19 @@
 #include "CFNetworkSchedule.h"
 
 #include "DeprecatedDNSServiceDiscovery.h"
+#if defined(__MACH__)
 #include <SystemConfiguration/SystemConfiguration.h>
+#endif
 
 #include <dns_sd.h>
+#if defined(__MACH__)
 #include <nameser.h>
+#endif
 #include <netinet/in.h>
 
+#ifndef howmany
+#define howmany(x, y)	(((x)+((y)-1))/(y))
+#endif /* !defined(howmany) */
 
 #if 0
 #pragma mark -
@@ -122,7 +129,9 @@ typedef struct {
 	UInt32								_interface;
 	
 	union {
+#if defined(__MACH__)
 		dns_service_discovery_ref		_old_service;
+#endif
 		DNSServiceRef					_new_service;
 	};
 	
@@ -147,8 +156,10 @@ typedef struct {
 ** without using normalization.
 */
 extern CFNetServiceRef _CFNetServiceCreateCommon(CFAllocatorRef alloc, CFStringRef domain, CFStringRef type, CFStringRef name, UInt32 port);
-	
+
+#if defined(__MACH__)	
 extern dns_service_discovery_ref _CFNetServiceGetDNSServiceDiscovery(CFNetServiceRef theService);
+#endif
 
 /*
 ** Exported for CFNetServiceMonitor so that it can keep the service up-to-date
@@ -174,13 +185,19 @@ static CFStringRef _ServiceDescribe(__CFNetService* service);
 static Boolean _ServiceSetInfo(__CFNetService* service, UInt32 property, CFTypeRef value, Boolean publish);
 static void _ServiceCancel(__CFNetService* service);
 static void _ServiceCancelDNSService_NoLock(__CFNetService* service, DNSServiceRef cancel);
+#if defined(__MACH__)
 static void _ServiceCreateQuery_NoLock(__CFNetService* service, ns_type rrtype, const char* name,
 									   const char* regtype, const char* domain, Boolean schedule);
+#endif
 static Boolean _ServiceBlockUntilComplete(__CFNetService* service);
+#if defined(__MACH__)
 static void _MachPortCallBack(CFMachPortRef port, void *msg, CFIndex size, void *info);
+#endif
 static void _LegacyRegistrationReply(int error, void* context);
+#if defined(__MACH__)
 static void _LegacyResolverReply(struct sockaddr* interface, struct sockaddr* address, const char* txtRecord,
 								 DNSServiceDiscoveryReplyFlags flags, void* context);
+#endif
 static void _RegisterReply(DNSServiceRef sdRef, DNSServiceFlags flags, DNSServiceErrorType errorCode,
 						   const char* name, const char* regtype, const char* domain, void* context);
 static void _ResolveReply(DNSServiceRef sdRef, DNSServiceFlags flags, uint32_t interfaceIndex,
@@ -277,11 +294,13 @@ _ServiceDestroy(__CFNetService* service) {
 	if (__CFBitIsSet(service->_flags, kFlagBitLegacyService)) {
 		
 		/* Need to clean up the service discovery stuff if there is */
+#if defined(__MACH__)
 		if (service->_old_service) {
 			
 			/* Release the underlying service discovery reference */
 			DNSServiceDiscoveryDeallocate_Deprecated(service->_old_service);
 		}
+#endif
 	}
 	else {
 		
@@ -364,7 +383,11 @@ _ServiceEqual(__CFNetService* s1, __CFNetService* s2) {
 			else if (CFEqual(n1, _kCFNetServiceEmptyString) || CFEqual(n2, _kCFNetServiceEmptyString)) {
 			
 				/* Get the computer name */
+#if defined(__MACH__)
 				CFStringRef computer_name = SCDynamicStoreCopyLocalHostName(NULL);
+#else
+				CFStringRef computer_name = CFSTR("localhost"); // XXX
+#endif
 				if (computer_name) {
 					
 					/* Set the default name for any that have no name */
@@ -410,7 +433,11 @@ _ServiceHash(__CFNetService* service) {
 	if (CFEqual(name, _kCFNetServiceEmptyString)) {
 		
 		/* Get the default name */
+#if defined(__MACH__)
 		name = SCDynamicStoreCopyLocalHostName(NULL);
+#else
+		name = CFSTR("localhost"); // XXX
+#endif
 		
 		/* If got a name, create the hash from it. */
 		if (name) {
@@ -632,7 +659,7 @@ _ServiceCancelDNSService_NoLock(__CFNetService* service, DNSServiceRef cancel) {
 	}
 }
 
-
+#if defined(__MACH__)
 /* static */ void
 _ServiceCreateQuery_NoLock(__CFNetService* service, ns_type rrtype, const char* name,
 						   const char* regtype, const char* domain, Boolean schedule)
@@ -747,7 +774,7 @@ _ServiceCreateQuery_NoLock(__CFNetService* service, ns_type rrtype, const char* 
 		}
 	}
 }
-
+#endif /* defined(__MACH__) */
 
 /* static */ Boolean
 _ServiceBlockUntilComplete(__CFNetService* service) {
@@ -985,7 +1012,7 @@ _RegisterReply(DNSServiceRef sdRef, DNSServiceFlags flags, DNSServiceErrorType e
 }
 
 
-
+#if defined(__MACH__)
 /* static */ void
 _ResolveReply(DNSServiceRef sdRef, DNSServiceFlags flags, uint32_t interfaceIndex,
 			  DNSServiceErrorType errorCode, const char* fullname, const char* hosttarget,
@@ -1128,6 +1155,7 @@ _ResolveReply(DNSServiceRef sdRef, DNSServiceFlags flags, uint32_t interfaceInde
 	/* Go ahead and release now that the callback is done. */
 	CFRelease(service);
 }
+#endif /* defined(__MACH__) */
 
 
 /* static */ void
@@ -1415,7 +1443,8 @@ _AddressQueryRecordReply(DNSServiceRef sdRef, DNSServiceFlags flags, uint32_t in
 				CFRelease(addr);
 			}
 		}
-		
+
+#if defined(__MACH__)		
 		if (rrtype == ns_t_a)
 			__CFBitSet(service->_flags, kFlagBitAReceived);
 		else if (rrtype == ns_t_aaaa)
@@ -1439,6 +1468,7 @@ _AddressQueryRecordReply(DNSServiceRef sdRef, DNSServiceFlags flags, uint32_t in
 				__CFBitSet(service->_flags, kFlagBitAAAAComplete);
 			}
 		}
+#endif /* defined(__MACH__) */
 		
 		/* If all lookups are done, need to perform the callback. */
 		if (__CFBitIsSet(service->_flags, kFlagBitAComplete) &&
@@ -1523,7 +1553,8 @@ _CFDataCreateWithRecord(CFAllocatorRef allocator, uint16_t rrtype, uint16_t rdle
 	UInt8* addr = NULL;
 	
 	memset(sa, 0, sizeof(buffer));
-	
+
+#if defined(__MACH__)	
 	/* Need to bundle up the A record into a sockaddr */
 	if (rrtype == ns_t_a) {
 		
@@ -1555,10 +1586,33 @@ _CFDataCreateWithRecord(CFAllocatorRef allocator, uint16_t rrtype, uint16_t rdle
 			addr = (UInt8*)(&(((struct sockaddr_in6*)sa)->sin6_addr));
 		}
 	}
+#endif /* defined(__MACH__) */
 	
 	if (addr) {
+		CFIndex len;
+
 		memmove(addr, rdata, rdlen);
-		result = CFDataCreate(allocator, (const UInt8*)sa, sa->sa_len);
+
+#if defined(__MACH__)
+		len = sa->sa_len;
+#else
+		switch (sa->sa_family) {
+
+		case AF_INET:
+			len = sizeof(struct sockaddr_in);
+			break;
+
+		case AF_INET6:
+			len = sizeof(struct sockaddr_in6);
+			break;
+
+		default:
+			len = 0;
+			break;
+
+		}
+#endif
+		result = CFDataCreate(allocator, (const UInt8*)sa, len);
 	}
 	
 	return result;
@@ -1654,14 +1708,14 @@ _InvalidateSources(CFMutableArrayRef sources) {
 #pragma mark * Legacy Support
 #endif
 
-
+#if defined(__MACH__)
 /* static */ void
 _MachPortCallBack(CFMachPortRef port, void *msg, CFIndex size, void *info) {
 
 	/* Call Service Discovery to do the dispatch. */
 	DNSServiceDiscovery_handleReply(msg);
 }
-
+#endif
 
 /* static */ void
 _LegacyRegistrationReply(int errorCode, void* context) {
@@ -1681,6 +1735,7 @@ _LegacyRegistrationReply(int errorCode, void* context) {
 	__CFSpinLock(&service->_lock);
 	
 	/* If the register canceled, don't need to do any of this. */
+#if defined(__MACH__)
 	if (service->_old_service) {
 		
 		/* If there is an error, fold the registration. */
@@ -1712,6 +1767,7 @@ _LegacyRegistrationReply(int errorCode, void* context) {
 			info = service->_client.info;
 		}
 	}
+#endif /* defined(__MACH__) */
 	
 	/* Unlock the service so the callback can be made safely. */
 	__CFSpinUnlock(&service->_lock);
@@ -1727,7 +1783,7 @@ _LegacyRegistrationReply(int errorCode, void* context) {
 	CFRelease(service);
 }
 
-
+#if defined(__MACH__)
 /* static */ void
 _LegacyResolverReply(struct sockaddr* interface, struct sockaddr* address, const char* txtRecord,
 					 DNSServiceDiscoveryReplyFlags flags, void* context)
@@ -1747,6 +1803,7 @@ _LegacyResolverReply(struct sockaddr* interface, struct sockaddr* address, const
 	__CFSpinLock(&service->_lock);
 	
 	/* If the register canceled, don't need to do any of this. */
+#if defined(__MACH__)
 	if (service->_old_service) {
 		
 		CFAllocatorRef alloc = CFGetAllocator((CFNetServiceRef)service);
@@ -1782,7 +1839,27 @@ _LegacyResolverReply(struct sockaddr* interface, struct sockaddr* address, const
 				** are used.  The rest are supposed to be zero, but mDNSResponder does not
 				** zero them.
 				*/
+#if defined(__MACH__)
 				int compare = (saved->sa_family == AF_INET) ? 8 : saved->sa_len;
+#else
+				int compare;
+
+				switch (saved->sa_family) {
+
+				case AF_INET:
+					compare = 8;
+					break;
+
+				case AF_INET6:
+					compare = sizeof(struct sockaddr_in6);
+					break;
+						
+				default:
+					compare = 0;
+					break;
+
+				}
+#endif /* defined(__MACH__) */
 
 				/* Break if found */
 				if (!memcmp(saved, address, compare))
@@ -1844,6 +1921,7 @@ _LegacyResolverReply(struct sockaddr* interface, struct sockaddr* address, const
 		memmove(&error, &(service->_error), sizeof(error));
 		info = service->_client.info;
 	}
+#endif /* defined(__MACH__) */
 	
 	/* Unlock the service so the callback can be made safely. */
 	__CFSpinUnlock(&service->_lock);
@@ -1858,7 +1936,7 @@ _LegacyResolverReply(struct sockaddr* interface, struct sockaddr* address, const
 	/* Go ahead and release now that the callback is done. */
 	CFRelease(service);
 }
-
+#endif /* defined(__MACH__) */
 
 #if 0
 #pragma mark * TXT Dictionary Key Callbacks
@@ -2319,9 +2397,13 @@ CFNetServiceResolveWithTimeout(CFNetServiceRef theService, CFTimeInterval timeou
 				properties[i][used] = '\0';
 			}
 		}
-		
+
+#if defined(__MACH__)		
 		_ServiceCreateQuery_NoLock(service, ns_t_invalid, properties[0],
 								   properties[1],  properties[2], FALSE);
+#else
+#warning "Linux portability issue"
+#endif
 		
 		/* If a timeout is set, need to start the timer. */
 		if (!service->_error.error && (timeout > 0.0)) {
@@ -2467,12 +2549,14 @@ CFNetServiceCancel(CFNetServiceRef theService) {
 		if (__CFBitIsSet(service->_flags, kFlagBitLegacyService)) {
 			
 			/* Need to clean up the service discovery stuff if there is */
+#if defined(__MACH__)
 			if (service->_old_service) {
 				
 				/* Release the underlying service discovery reference */
 				DNSServiceDiscoveryDeallocate_Deprecated(service->_old_service);
 				service->_old_service = NULL;
 			}
+#endif /* defined(__MACH__) */
 		}
 		else {
 			
@@ -2587,12 +2671,14 @@ CFNetServiceSetClient(CFNetServiceRef theService, CFNetServiceClientCallBack cli
 			if (__CFBitIsSet(service->_flags, kFlagBitLegacyService)) {
 				
 				/* Need to clean up the service discovery stuff if there is */
+#if defined(__MACH__)
 				if (service->_old_service) {
 					
 					/* Release the underlying service discovery reference */
 					DNSServiceDiscoveryDeallocate_Deprecated(service->_old_service);
 					service->_old_service = NULL;
 				}
+#endif /* defined(__MACH__) */
 			}
 			
 			else {
@@ -2973,7 +3059,7 @@ _CFNetServiceSetInfoNoPublish(CFNetServiceRef theService, UInt32 property, CFTyp
 #pragma mark Deprecated API
 #endif
 
-
+#if defined(__MACH__)
 /* extern */ dns_service_discovery_ref
 _CFNetServiceGetDNSServiceDiscovery(CFNetServiceRef theService) {
 	
@@ -2988,7 +3074,7 @@ _CFNetServiceGetDNSServiceDiscovery(CFNetServiceRef theService) {
 	
 	return result;
 }
-
+#endif /* defined(__MACH__) */
 
 /* extern */ CFStringRef
 CFNetServiceGetProtocolSpecificInformation(CFNetServiceRef theService) {
@@ -3016,6 +3102,7 @@ CFNetServiceSetProtocolSpecificInformation(CFNetServiceRef theService, CFStringR
 	__CFSpinLock(&(service->_lock));
 	
 	/* If not registered on the network, simply save the value */
+#if defined(__MACH__)
 	if (!service->_old_service)
 		CFDictionarySetValue(service->_info, (const void*)_kCFNetServiceTXT, theInfo);
 	
@@ -3039,6 +3126,7 @@ CFNetServiceSetProtocolSpecificInformation(CFNetServiceRef theService, CFStringR
 		/* Send it to the wire */
 		DNSServiceRegistrationUpdateRecord_Deprecated(service->_old_service, 0, bytesUsed + 1, str, 0);
 	}
+#endif /* defined(__MACH__) */
 	
 	__CFSpinUnlock(&(service->_lock));
 }
@@ -3066,7 +3154,8 @@ CFNetServiceRegister(CFNetServiceRef theService, CFStreamError* error) {
 	
 	/* Lock down the service to start */
 	__CFSpinLock(&(service->_lock));
-	
+
+#if defined(__MACH__)	
 	do {
 		
 		int i;
@@ -3200,6 +3289,7 @@ CFNetServiceRegister(CFNetServiceRef theService, CFStreamError* error) {
 		}
 		
 	} while (0);
+#endif /* defined(__MACH__) */
 	
 	/* Copy the error. */
 	memmove(error, &service->_error, sizeof(error[0]));
@@ -3236,7 +3326,8 @@ CFNetServiceResolve(CFNetServiceRef theService, CFStreamError* error) {
 	
 	/* Lock down the service to start */
 	__CFSpinLock(&(service->_lock));
-	
+
+#if defined(__MACH__)	
 	do {
 		
 		int i;
@@ -3371,6 +3462,7 @@ CFNetServiceResolve(CFNetServiceRef theService, CFStreamError* error) {
 		}
 		
 	} while (0);
+#endif /* defined(__MACH__) */
 	
 	/* Copy the error. */
 	memmove(error, &service->_error, sizeof(error[0]));

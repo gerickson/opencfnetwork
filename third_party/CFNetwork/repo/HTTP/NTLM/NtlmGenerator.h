@@ -48,7 +48,9 @@
 
 #include <CoreFoundation/CFData.h>
 #include <CoreFoundation/CFString.h>
+#if defined(__MACH__)
 #include <Security/cssmtype.h>
+#endif
 
 #ifdef  __cplusplus
 extern "C" {

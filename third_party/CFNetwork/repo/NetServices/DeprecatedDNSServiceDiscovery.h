@@ -29,9 +29,8 @@
  *
  */
 
-
+#if defined(__MACH__)
 #include <DNSServiceDiscovery/DNSServiceDiscovery.h>
-
 
 dns_service_discovery_ref DNSServiceRegistrationCreate_Deprecated
 (
@@ -62,3 +61,4 @@ void DNSServiceDiscoveryDeallocate_Deprecated(dns_service_discovery_ref dnsServi
 
 
 DNSServiceRegistrationReplyErrorType DNSServiceRegistrationUpdateRecord_Deprecated(dns_service_discovery_ref ref, DNSRecordReference reference, uint16_t rdlen, const char *rdata, uint32_t ttl);
+#endif /* defined(__MACH__) */

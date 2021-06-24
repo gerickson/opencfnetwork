@@ -29,6 +29,7 @@
  *
  */
 
+#if defined(__MACH__)
 #include <stdio.h>
 #include <JavaScriptGlue/JavaScriptGlue.h>
 #include "CFNetworkInternal.h"
@@ -210,4 +211,4 @@ JSObjectCopyProperty(JSObjectRef ref, CFStringRef propertyName) {
 
 #undef GET_DYNAMIC_SYMBOL
 #endif	/* DYNAMICALLY_LOAD_JAVASCRIPT */
-
+#endif /* defined(__MACH__) */

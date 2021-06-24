@@ -74,28 +74,72 @@ CF_EXPORT void CFLog(int p, CFStringRef str, ...);
 
 struct CF_CONST_STRING {
     CFRuntimeBase _base;
-    const char *_ptr;
-    uint32_t _length;
+    uint8_t *     _ptr;
+    uint32_t      _length;
 };
 
-// On Windows, DLL's don't let us init the _base member to be &__CFConstantStringClassReference because
-// it is not a constant.  Since for now we don't have ObjC around, and we don't care about toll-free
-// bridging, we can just init this field to NULL for now.
-// CF_EXPORT int __CFConstantStringClassReference[];
+extern int __CFConstantStringClassReference[];
 
-#if defined(__ppc__)
-#define CONST_STRING_DECL(S, V)			\
-static struct CF_CONST_STRING __ ## S ## __ = {{NULL/*&__CFConstantStringClassReference*/, 0x0000, 0x07c8}, V, sizeof(V) - 1}; \
-const CFStringRef S = (CFStringRef) & __ ## S ## __;
-#elif defined(__i386__)
-#define CONST_STRING_DECL(S, V)			\
-static struct CF_CONST_STRING __ ## S ## __ = {{NULL/*&__CFConstantStringClassReference*/, 0x07c8, 0x0000}, V, sizeof(V) - 1}; \
-const CFStringRef S = (CFStringRef) & __ ## S ## __;
+#if defined(__WIN32__)
+#define ___WindowsConstantStringClassReference (uintptr_t)&__CFConstantStringClassReference
 #else
-#error undefined architecture
-#endif
+#define ___WindowsConstantStringClassReference NULL
 #endif
 
+// The original code used the preprocessor mnemonics __ppc__ and
+// __i386__; however, these are/were just proxies for big and little
+// endian byte ordering, respectively. Just use those for better
+// portability.
+
+#if defined(__BYTE_ORDER__)
+# if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#  define __CFNETWORK_BYTEORDER_BIG    0
+#  define __CFNETWORK_BYTEORDER_LITTLE 1
+# elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#  define __CFNETWORK_BYTEORDER_BIG    1
+#  define __CFNETWORK_BYTEORDER_LITTLE 0
+# endif /* __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ */
+#elif defined(__LITTLE_ENDIAN__) && (__LITTLE_ENDIAN__ == 1)
+# define __CFNETWORK_BYTEORDER_BIG    0
+# define __CFNETWORK_BYTEORDER_LITTLE 1
+#elif defined(__BIG_ENDIAN__) && (__BIG_ENDIAN__ == 1)
+# define __CFNETWORK_BYTEORDER_BIG    1
+# define __CFNETWORK_BYTEORDER_LITTLE 0
+#else
+#error "Endianness undefined!"
+#endif /* defined(__BYTE_ORDER__) */
+
+#if __CFNETWORK_BYTEORDER_BIG
+# define CONST_STRING_DECL(S, V)         \
+    struct CF_CONST_STRING __ ## S ## __ = {{(uintptr_t)&__CFConstantStringClassReference, {0x00, 0x00, 0x07, 0xc8}}, (uint8_t *)V, sizeof(V) - 1}; \
+const CFStringRef S = (CFStringRef) & __ ## S ## __;
+#elif !defined(__WIN32__) || (defined(__WIN32__) && defined(__GNUC__))
+# define CONST_STRING_DECL(S, V)         \
+    struct CF_CONST_STRING __ ## S ## __ = {{(uintptr_t)&__CFConstantStringClassReference, {0xc8, 0x07, 0x00, 0x00}}, (uint8_t *)V, sizeof(V) - 1}; \
+const CFStringRef S = (CFStringRef) & __ ## S ## __;
+#elif defined(__WIN32__)
+# define CONST_STRING_DECL(S, V)         \
+    struct CF_CONST_STRING __ ## S ## __ = {{(uintptr_t)&__CFConstantStringClassReference, {0xc8, 0x07, 0x00, 0x00}},(uint8_t *) V, sizeof(V) - 1}; \
+CF_EXPORT const CFStringRef S = (CFStringRef) & __ ## S ## __;
+
+# define CONST_STRING_DECL_EXPORT(S, V)          \
+    struct CF_CONST_STRING __ ## S ## __ = {{___WindowsConstantStringClassReference, {0xc8, 0x07, 0x00, 0x00}}, (uint8_t *)V, sizeof(V) - 1}; \
+CF_EXPORT const CFStringRef S = (CFStringRef) & __ ## S ## __;
+
+#else
+# define CONST_STRING_DECL(S, V)         \
+    struct CF_CONST_STRING __ ## S ## __ = {{(uintptr_t)NULL, {0xc8, 0x07, 0x00, 0x00}},(uint8_t *)V, sizeof(V) - 1}; \
+const CFStringRef S = (CFStringRef) & __ ## S ## __;
+
+# define CONST_STRING_DECL_EXPORT(S, V)          \
+    struct CF_CONST_STRING __ ## S ## __ = {{(uintptr_t)NULL, {0xc8, 0x07, 0x00, 0x00}}, (uint8_t *)V, sizeof(V) - 1}; \
+CF_EXPORT const CFStringRef S = (CFStringRef) & __ ## S ## __;
+
+#endif // __CFNETWORK_BYTEORDER_BIG
+
+#undef ___WindowsConstantStringClassReference
+
+#endif /* __CONSTANT_CFSTRINGS__ */
 
 /*!
 	@function __CFNetworkLoadFramework

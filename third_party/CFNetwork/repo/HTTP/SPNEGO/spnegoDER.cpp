@@ -55,11 +55,14 @@
  */
  
 #include "spnegoDER.h"
+#if defined(__MACH__)
 #include <Security/cssmtype.h>
 #include <Security/asn1Templates.h>
+#endif
 #include <stddef.h>
 #include "spnegoBlob.h"
 
+#if defined(__MACH__)
 /***
  *** SPNEGO-specific OIDS 
  ***/
@@ -170,3 +173,4 @@ const SecAsn1Template SpnegoNegTokenTargTemplate[] = {
 	  0, _SpnegoNegTokenTargTemplate, sizeof(SpnegoNegTokenTarg) },
 	{ 0 }
 };
+#endif /* defined(__MACH__) */

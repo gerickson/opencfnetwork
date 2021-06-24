@@ -29,9 +29,15 @@
  *
  */
 
+#include "CFNetworkInternal.h"
+
+#if defined(__MACH__)
 const name_t _CFNetDiagnosticMachPortName = "com.apple.NetworkDiagnostic.agent";
+#endif
+
 #define _CFNetDiagnosticMachProtocolVersion 1L
 
+#ifdef __CONSTANT_CFSTRINGS__
 const CFStringRef _CFNetDiagnosticNameKey = CFSTR("NDNameKey");
 const CFStringRef _CFNetDiagnosticBundleKey = CFSTR("NDBundleKey");
 const CFStringRef _CFNetDiagnosticRemoteHostKey = CFSTR("NDRemoteHostKey");
@@ -39,4 +45,12 @@ const CFStringRef _CFNetDiagnosticProtocolKey = CFSTR("NDProtocolKey");
 const CFStringRef _CFNetDiagnosticPortKey = CFSTR("NDPortKey");
 const CFStringRef _CFNetDiagnosticServiceIDKey = CFSTR("NDServiceIDKey");
 const CFStringRef _CFNetDiagnosticMethodKey = CFSTR("NDMethodKey");
-
+#else
+CONST_STRING_DECL(_CFNetDiagnosticNameKey,       "NDNameKey")
+CONST_STRING_DECL(_CFNetDiagnosticBundleKey,     "NDBundleKey")
+CONST_STRING_DECL(_CFNetDiagnosticRemoteHostKey, "NDRemoteHostKey")
+CONST_STRING_DECL(_CFNetDiagnosticProtocolKey,   "NDProtocolKey")
+CONST_STRING_DECL(_CFNetDiagnosticPortKey,       "NDPortKey")
+CONST_STRING_DECL(_CFNetDiagnosticServiceIDKey,  "NDServiceIDKey")
+CONST_STRING_DECL(_CFNetDiagnosticMethodKey,     "NDMethodKey")
+#endif

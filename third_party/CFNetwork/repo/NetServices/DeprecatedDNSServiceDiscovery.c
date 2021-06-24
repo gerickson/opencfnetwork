@@ -32,7 +32,7 @@
 #include "DeprecatedDNSServiceDiscovery.h"
 
 
-
+#if defined(__MACH__)
 dns_service_discovery_ref DNSServiceRegistrationCreate_Deprecated
 (
 	const char 		*name,
@@ -77,3 +77,4 @@ DNSServiceRegistrationReplyErrorType DNSServiceRegistrationUpdateRecord_Deprecat
 {
 	return DNSServiceRegistrationUpdateRecord(ref, reference, rdlen, rdata, ttl);
 }
+#endif /* defined(__MACH__) */

@@ -26,6 +26,7 @@
 /* Module CFNetDiagnosticsProtocol */
 
 #include <string.h>
+#if defined(__MACH__)
 #include <mach/ndr.h>
 #include <mach/boolean.h>
 #include <mach/kern_return.h>
@@ -34,6 +35,7 @@
 #include <mach/message.h>
 #include <mach/mig_errors.h>
 #include <mach/port.h>
+#endif /* defined(__MACH__) */
 
 #ifdef AUTOTEST
 #ifndef FUNCTION_PTR_T
@@ -51,10 +53,12 @@ typedef function_table_entry 	*function_table_t;
 #define	CFNetDiagnosticsProtocol_MSG_COUNT	1
 #endif	/* CFNetDiagnosticsProtocol_MSG_COUNT */
 
+#if defined(__MACH__)
 #include <mach/std_types.h>
 #include <mach/mig.h>
 #include <mach/mig.h>
 #include <mach/mach_types.h>
+#endif /* defined(__MACH__) */
 
 #ifdef __BeforeMigUserHeader
 __BeforeMigUserHeader
@@ -63,7 +67,7 @@ __BeforeMigUserHeader
 #include <sys/cdefs.h>
 __BEGIN_DECLS
 
-
+#if defined(__MACH__)
 /* SimpleRoutine passDescriptor */
 #ifdef	mig_external
 mig_external
@@ -157,5 +161,7 @@ union __ReplyUnion___CFNetDiagnosticClient_CFNetDiagnosticsProtocol_subsystem {
 #ifdef __AfterMigUserHeader
 __AfterMigUserHeader
 #endif /* __AfterMigUserHeader */
+
+#endif /* defined(__MACH__) */
 
 #endif	 /* _CFNetDiagnosticsProtocol_user_ */

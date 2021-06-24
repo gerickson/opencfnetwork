@@ -49,7 +49,9 @@
 #define _SPNEGO_BLOB_H_
 
 //#include "spnegoTool.h"
+#if defined(__MACH__)
 #include <Security/cssmtype.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {

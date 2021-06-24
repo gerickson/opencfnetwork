@@ -170,7 +170,7 @@ CFNetConnectionCacheRef createConnectionCache(void)
         dictionary = CFDictionaryCreateMutable(NULL, 0, &connectionCacheCallBacks, &kCFTypeDictionaryValueCallBacks);
         if (dictionary) {
             conn_cache->dictionary = dictionary;
-            conn_cache->connectionCacheLock = 0;
+			CF_SPINLOCK_INIT_FOR_STRUCTS(conn_cache->connectionCacheLock);
         } else {
             free(conn_cache);
             conn_cache = NULL;

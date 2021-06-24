@@ -128,7 +128,7 @@
 #define msgh_reply_port		msgh_local_port
 
 
-
+#if defined(__MACH__)
 /* SimpleRoutine passDescriptor */
 mig_external kern_return_t _CFNetDiagnosticClient_passDescriptor
 (
@@ -222,3 +222,4 @@ mig_external kern_return_t _CFNetDiagnosticClient_passDescriptor
 	return KERN_SUCCESS;
     }
 }
+#endif /* defined(__MACH__) */

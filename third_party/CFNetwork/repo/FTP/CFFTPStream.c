@@ -39,8 +39,9 @@
 #include <CoreFoundation/CFPriv.h>
 #include <CFNetwork/CFHTTPConnectionPriv.h>  // for the asynchronous proxy lookup
 #include "CFNetworkSchedule.h"
+#if defined(__MACH__)
 #include <SystemConfiguration/SystemConfiguration.h>
-
+#endif
 
 #if 0
 #pragma mark *Win32 Specifics
@@ -77,10 +78,17 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#if defined(__MACH__)
 #include <sys/dirent.h>
+#else
+#include <dirent.h>
+#endif
 #include <netinet/tcp.h>
 #endif
 
+#ifndef SOCK_MAXADDRLEN
+#define SOCK_MAXADDRLEN 255
+#endif
 
 #if 0
 #pragma mark -
@@ -315,7 +323,6 @@ static CONST_STRING_DECL(kCFFTPStreamOpenCompleted, "_FTPStreamOpenCompleted")
 #define kCFFTPStreamUploadDescription	CFSTR("upload")
 #define kCFFTPStreamDownloadDescription	CFSTR("download")
 #else
-#error crap
 static CONST_STRING_DECL(kCFFTPStreamDescriptionFormat, "<FTPStream %p>{%@, url = %@, flags = 0x%x }")
 static CONST_STRING_DECL(kCFFTPStreamUploadDescription, "upload")
 static CONST_STRING_DECL(kCFFTPStreamDownloadDescription, "download")
@@ -566,7 +573,7 @@ extern void _CFSocketStreamCreatePair(CFAllocatorRef alloc, CFStringRef host, UI
 
 static CFMutableDictionaryRef gFTPConnectionTimeouts = NULL;
 static CFNetConnectionCacheRef gFTPConnectionCache = NULL;
-static CFSpinLock_t gFTPSpinLock = 0;
+static CFSpinLock_t gFTPSpinLock = CFSpinLockInit;
 static _CFNetConnectionCallBacks* _kFTPConnectionCallBacks = NULL;
 
 
@@ -1491,7 +1498,8 @@ _FTPStreamSetProperty(CFTypeRef stream, CFStringRef propertyName,
                 CFDictionaryRemoveValue(ctxt->_properties, propertyName);
                 result = TRUE;
             }
-            
+
+#if defined(__MACH__)
             else if (CFGetTypeID(propertyValue) == CFDictionaryGetTypeID()) {
 
 				// Attempt to set the passive bit based upon proxy dictionary from SC.
@@ -1523,6 +1531,7 @@ _FTPStreamSetProperty(CFTypeRef stream, CFStringRef propertyName,
 				
                 result = TRUE;
             }
+#endif // defined(__MACH__)
         }
     }
     
@@ -2725,7 +2734,7 @@ _PASVAddressParser(const UInt8* buffer, struct sockaddr_in* saddr)
             } else {
                 host = ntohl(host);
                 memmove(&saddr->sin_addr, &host, sizeof(u_long));
-#if !defined(__WIN32__)
+#if !defined(__WIN32__) && !defined(__linux__)
                 saddr->sin_len = sizeof(saddr[0]);
 #endif
                 saddr->sin_family = AF_INET;

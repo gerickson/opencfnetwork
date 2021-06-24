@@ -139,21 +139,21 @@ static CONST_STRING_DECL(_kCFHTTPMessageSetCookieHeader, "Set-Cookie")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 static const CFStringRef kHTTPMessageHeaderMap2[] = {
-	_kCFHTTPMessageAcceptRangesHeader,
-	_kCFHTTPMessageCacheControlHeader,
-	_kCFHTTPMessageConnectHeader,
-	_kCFHTTPMessageContentLanguageHeader,
-	_kCFHTTPMessageContentLengthHeader,
-	_kCFHTTPMessageContentLocationHeader,
-	_kCFHTTPMessageContentTypeHeader,
-	_kCFHTTPMessageDateHeader,
-	_kCFHTTPMessageEtagHeader,
-	_kCFHTTPMessageExpiresHeader,
-	_kCFHTTPMessageLastModifiedHeader,
-	_kCFHTTPMessageLocationHeader,
-	_kCFHTTPMessageProxyAuthenticateHeader,
-	_kCFHTTPMessageServerHeader,
-	_kCFHTTPMessageSetCookieHeader
+	(CFStringRef)&_kCFHTTPMessageAcceptRangesHeader,
+	(CFStringRef)&_kCFHTTPMessageCacheControlHeader,
+	(CFStringRef)&_kCFHTTPMessageConnectHeader,
+	(CFStringRef)&_kCFHTTPMessageContentLanguageHeader,
+	(CFStringRef)&_kCFHTTPMessageContentLengthHeader,
+	(CFStringRef)&_kCFHTTPMessageContentLocationHeader,
+	(CFStringRef)&_kCFHTTPMessageContentTypeHeader,
+	(CFStringRef)&_kCFHTTPMessageDateHeader,
+	(CFStringRef)&_kCFHTTPMessageEtagHeader,
+	(CFStringRef)&_kCFHTTPMessageExpiresHeader,
+	(CFStringRef)&_kCFHTTPMessageLastModifiedHeader,
+	(CFStringRef)&_kCFHTTPMessageLocationHeader,
+	(CFStringRef)&_kCFHTTPMessageProxyAuthenticateHeader,
+	(CFStringRef)&_kCFHTTPMessageServerHeader,
+	(CFStringRef)&_kCFHTTPMessageSetCookieHeader
 };
 
 #define kHTTPMessageNumItems (sizeof(kHTTPMessageHeaderMap) / sizeof(kHTTPMessageHeaderMap[0]))

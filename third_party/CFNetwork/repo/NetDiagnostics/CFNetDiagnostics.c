@@ -30,16 +30,20 @@
  */
 
 #include <CoreFoundation/CoreFoundation.h>
+#if defined(__MACH__)
 #include <SystemConfiguration/SystemConfiguration.h>
+#endif
 
 #include "CFNetworkInternal.h"
 #include <CFNetwork/CFNetDiagnostics.h>
 #include <CFNetwork/CFNetDiagnosticsPriv.h>
 
 //For mig and mach stuff
+#if defined(__MACH__)
 #include <mach/mach.h>
 #include <servers/bootstrap.h>
 #include <servers/bootstrap_defs.h>
+#endif /* defined(__MACH__) */
 #include "CFNetDiagnosticsProtocol.h"
 #include "CFNetDiagnosticsInternal.h"
 
@@ -50,8 +54,10 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+#if defined(__MACH__)
 //For mach_absolute_time()
 #include <mach/mach_time.h>
+#endif
 
 //For printf
 #include <stdio.h>
@@ -85,12 +91,21 @@ Usage:
 	
 */
 
+#ifdef __CONSTANT_CFSTRINGS__
 const CFStringRef CFNetDiagnosticProtocolHTTP = CFSTR("http");
 const CFStringRef CFNetDiagnosticProtocolFTP = CFSTR("ftp");
 const CFStringRef CFNetDiagnosticProtocolSMTP = CFSTR("smtp");
 const CFStringRef CFNetDiagnosticProtocolIMAP = CFSTR("imap");
 const CFStringRef CFNetDiagnosticProtocolOSCAR = CFSTR("oscar");
 const CFStringRef CFNetDiagnosticProtocolUnknown = CFSTR("unknown");
+#else
+CONST_STRING_DECL(CFNetDiagnosticProtocolHTTP,    "http")
+CONST_STRING_DECL(CFNetDiagnosticProtocolFTP,     "ftp")
+CONST_STRING_DECL(CFNetDiagnosticProtocolSMTP,    "smtp")
+CONST_STRING_DECL(CFNetDiagnosticProtocolIMAP,    "imap")
+CONST_STRING_DECL(CFNetDiagnosticProtocolOSCAR,   "oscar")
+CONST_STRING_DECL(CFNetDiagnosticProtocolUnknown, "unknown")
+#endif
 
 #if 0
 
@@ -168,6 +183,7 @@ CFTypeRef _CFNetDiagnosticGetValueFromDictionaryAndRetain(CFDictionaryRef dict, 
 	provided functions the only thing I am possibly going to do with it is call SCDynamicStoreCopyValue.
 */
 
+#if defined(__MACH__)
 static
 CFDictionaryRef _CFNetDiagnosticsGetDataFromSCDSAndThowAwayGarbage(CFAllocatorRef allocator, SCDynamicStoreRef store, 
 	CFStringRef(*SCFunc)(CFAllocatorRef, CFStringRef, CFStringRef, CFStringRef), CFStringRef arg1, CFStringRef arg2, CFStringRef arg3) {
@@ -184,7 +200,7 @@ CFDictionaryRef _CFNetDiagnosticsGetDataFromSCDSAndThowAwayGarbage(CFAllocatorRe
 	
 	return dict;
 }
-
+#endif /* defined(__MACH__) */
 
 CFNetDiagnosticRef CFNetDiagnosticCreateBasic(	CFAllocatorRef allocator,
 											CFStringRef remoteHost, 
@@ -273,6 +289,7 @@ void CFNetDiagnosticSetServiceID(CFNetDiagnosticRef details, CFStringRef service
 	_CFNetDiagnosticSetDictionaryKeyIfNotNull(_CFNetDiagnosticServiceIDKey, service, detailsDict);
 } 
 
+#if defined(__MACH__)
 CFNetDiagnosticStatus CFNetDiagnosticDiagnoseProblemInteractively(CFNetDiagnosticRef details) {
 	SInt32 retval = 0;
 	mach_port_t port = MACH_PORT_NULL;
@@ -400,7 +417,6 @@ CFArrayRef copyCurrentDNSServers(void) {
 	return retval;
 }
 
-
 CFNetDiagnosticStatus CFNetDiagnosticCopyNetworkStatusActively(CFNetDiagnosticRef details, CFNumberRef timeout, CFStringRef *description) {
 	uint64_t timestamp;
 	uint32_t timeout_value;
@@ -509,6 +525,7 @@ CFNetDiagnosticStatus CFNetDiagnosticCopyNetworkStatusActively(CFNetDiagnosticRe
 	//FIXME
 	return retval;
 }
+#endif /* defined(__MACH__) */
 
 static
 Boolean _CFNetDiagnosticIsLinkLocal (CFStringRef s)
@@ -524,6 +541,9 @@ Boolean _CFNetDiagnosticIsLinkLocal (CFStringRef s)
 		if(addr == INADDR_NONE) {
 			retval = 0;
 		} else {
+#if !defined(__MACH__) && !defined(IN_LINKLOCAL)
+#define IN_LINKLOCAL(i)		(((u_int32_t)(i) & 0xffff0000) == 0xa9fe0000)
+#endif
 			retval = IN_LINKLOCAL(ntohl(addr));
 		} 
 	}
@@ -533,6 +553,7 @@ Boolean _CFNetDiagnosticIsLinkLocal (CFStringRef s)
 
 //_CFNetDiagnosticCopyNetworkStatusPassivelyInterfaceSpecific is where the meat of CFNetDiagnosticCopyNetworkStatusPassively is implemented
 
+#if defined(__MACH__)
 static
 CFNetDiagnosticStatus _CFNetDiagnosticCopyNetworkStatusPassivelyInterfaceSpecific(SCDynamicStoreRef store, CFStringRef serviceID, CFStringRef *description) {
 	CFDictionaryRef dict = NULL;
@@ -704,3 +725,4 @@ CFNetDiagnosticStatus CFNetDiagnosticCopyNetworkStatusPassively(CFNetDiagnosticR
 	
 	return retval;
 }
+#endif /* defined(__MACH__) */

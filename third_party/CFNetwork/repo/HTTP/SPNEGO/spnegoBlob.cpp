@@ -32,11 +32,13 @@
 #include <string.h>
 #include <stdlib.h>
 #include "spnegoKrb.h"
+#if defined(__MACH__)
 #include <security_cdsa_utils/cuEnc64.h>
 #include <Security/SecAsn1Coder.h>
+#endif
 #include "spnegoDER.h"
 
-
+#if defined(__MACH__)
 #define PA_CHUNK_SIZE	1024
 
 
@@ -149,4 +151,4 @@ int spnegoTokenInitFromPrincipal(
 	}
 	return ourRtn;
 }
-
+#endif /* defined(__MACH__) */

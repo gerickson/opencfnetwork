@@ -38,6 +38,10 @@
 // For _CFNetworkUserAgentString()
 #include "CFHTTPInternal.h" 
 
+#if defined(__linux__)
+#define __USE_GNU 1
+#endif
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
@@ -46,9 +50,15 @@
 
 #include <CoreFoundation/CFStreamPriv.h>
 #include <CFNetwork/CFSocketStreamPriv.h>
+#if defined(__MACH__)
 #include <SystemConfiguration/SystemConfiguration.h>
 #include <Security/Security.h>
 #include <Security/SecureTransportPriv.h>
+#endif /* defined(__MACH__) */
+
+#ifndef howmany
+#define howmany(x, y)	(((x)+((y)-1))/(y))
+#endif /* !defined(howmany) */
 
 #if 0
 #pragma mark -
@@ -155,6 +165,8 @@ static CONST_STRING_DECL(_kCFStreamPropertySOCKSSendBuffer, "_kCFStreamPropertyS
 static CONST_STRING_DECL(_kCFStreamPropertySOCKSRecvBuffer, "_kCFStreamPropertySOCKSRecvBuffer")
 static CONST_STRING_DECL(_kCFStreamPropertyReadCancel, "_kCFStreamPropertyReadCancel")
 static CONST_STRING_DECL(_kCFStreamPropertyWriteCancel, "_kCFStreamPropertyWriteCancel")
+static CONST_STRING_DECL(_kCFStreamPropertyReadTimeout, "_kCFStreamPropertyReadTimeout")
+static CONST_STRING_DECL(_kCFStreamPropertyWriteTimeout, "_kCFStreamPropertyWriteTimeout")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
 #ifdef __MACH__
@@ -364,8 +376,10 @@ static void _SocketCallBack(CFSocketRef s, CFSocketCallBackType type, CFDataRef 
 static void _HostCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamError* error, _CFSocketStreamContext* info);
 static void _NetServiceCallBack(CFNetServiceRef theService, CFStreamError* error, _CFSocketStreamContext* info);
 static void _SocksHostCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamError* error, _CFSocketStreamContext* info);
+#if defined(__MACH__)
 static void _ReachabilityCallBack(SCNetworkReachabilityRef target, const SCNetworkConnectionFlags flags, _CFSocketStreamContext* ctxt);
 static void _NetworkConnectionCallBack(SCNetworkConnectionRef conn, SCNetworkConnectionStatus status, _CFSocketStreamContext* ctxt);
+#endif /* defined(__MACH__) */
 
 static Boolean _SchedulablesAdd(CFMutableArrayRef schedulables, CFTypeRef addition);
 static Boolean _SchedulablesRemove(CFMutableArrayRef schedulables, CFTypeRef removal);
@@ -473,9 +487,10 @@ static void _SocketStreamSecurityClose_NoLock(_CFSocketStreamContext* ctxt);
 static Boolean _SocketStreamSecuritySetContext_NoLock(_CFSocketStreamContext *ctxt, CFDataRef value);
 static Boolean _SocketStreamSecuritySetInfo_NoLock(_CFSocketStreamContext* ctxt, CFDictionaryRef settings);
 static Boolean _SocketStreamSecuritySetAuthenticatesServerCertificates_NoLock(_CFSocketStreamContext* ctxt, CFBooleanRef authenticates);
+#if defined(__MACH__)
 static CFStringRef _SecurityGetProtocol(SSLContextRef security);
 static SSLSessionState _SocketStreamSecurityGetSessionState_NoLock(_CFSocketStreamContext* ctxt);
-
+#endif
 
 #if 0
 #pragma mark -
@@ -1207,9 +1222,11 @@ _SocketStreamClose(CFTypeRef stream, _CFSocketStreamContext* ctxt) {
 	if (!ctxt->_clientReadStream && !ctxt->_clientWriteStream) {
 		
 		CFRange r;
-		
+
+#if defined(__MACH__)
 		if (CFDictionaryGetValue(ctxt->_properties, kCFStreamPropertySocketSSLContext))
 			_SocketStreamSecurityClose_NoLock(ctxt);
+#endif
 		
 		r = CFRangeMake(0, CFArrayGetCount(ctxt->_schedulables));
 		
@@ -1305,7 +1322,7 @@ _SocketStreamCopyProperty(CFTypeRef stream, CFStringRef propertyName, _CFSocketS
 		}
 		
 		else if (CFEqual(kCFStreamPropertySSLPeerCertificates, propertyName)) {
-			
+#if defined(__MACH__)			
 			CFDataRef wrapper = (CFDataRef)CFDictionaryGetValue(ctxt->_properties, kCFStreamPropertySocketSSLContext);
 			if (wrapper) {
 				if (SSLGetPeerCertificates(*((SSLContextRef*)CFDataGetBytePtr(wrapper)), (CFArrayRef*)&result) && result) {
@@ -1313,10 +1330,11 @@ _SocketStreamCopyProperty(CFTypeRef stream, CFStringRef propertyName, _CFSocketS
 					result = NULL;
 				}
 			}
+#endif /* defined(__MACH__) */
 		}
 
 		else if (CFEqual(_kCFStreamPropertySSLClientCertificates, propertyName)) {
-			
+#if defined(__MACH__)			
 			CFDataRef wrapper = (CFDataRef)CFDictionaryGetValue(ctxt->_properties, kCFStreamPropertySocketSSLContext);
 			if (wrapper) {
 				if (SSLGetCertificate(*((SSLContextRef*)CFDataGetBytePtr(wrapper)), (CFArrayRef*)&result) && result) {
@@ -1326,10 +1344,11 @@ _SocketStreamCopyProperty(CFTypeRef stream, CFStringRef propertyName, _CFSocketS
 					CFRetain(result);
 				}
 			}
+#endif /* defined(__MACH__) */
 		}
 
 		else if (CFEqual(_kCFStreamPropertySSLClientCertificateState, propertyName)) {
-			
+#if defined(__MACH__)			
 			CFDataRef wrapper = (CFDataRef)CFDictionaryGetValue(ctxt->_properties, kCFStreamPropertySocketSSLContext);
 			if (wrapper) {
 				SSLClientCertificateState clientState = kSSLClientCertNone;
@@ -1339,16 +1358,18 @@ _SocketStreamCopyProperty(CFTypeRef stream, CFStringRef propertyName, _CFSocketS
 					result = CFNumberCreate(CFGetAllocator(ctxt->_properties), kCFNumberIntType, &clientState);
 				}
 			}
+#endif /* defined(__MACH__) */
 		}
 
 	}
 	
     if (CFEqual(propertyName, kCFStreamPropertySocketSecurityLevel)) {
-		
+#if defined(__MACH__)		
 		CFDataRef wrapper = (CFDataRef)CFDictionaryGetValue(ctxt->_properties, kCFStreamPropertySocketSSLContext);
-		
+
 		if (wrapper)
 			property = _SecurityGetProtocol(*((SSLContextRef*)CFDataGetBytePtr(wrapper)));
+#endif /* defined(__MACH__) */
     }
 	
 	/* Do whatever is needed to "copy" the type if found. */
@@ -1475,9 +1496,11 @@ _SocketStreamSetProperty(CFTypeRef stream, CFStringRef propertyName, CFTypeRef p
 	
 	else if (CFEqual(propertyName, kCFStreamPropertyCONNECTProxy))
 		result = _CONNECTSetInfo_NoLock(ctxt, propertyValue);
-	
+
+#if defined(__MACH__)	
 	else if (CFEqual(propertyName, kCFStreamPropertySocketSSLContext))
 		result = _SocketStreamSecuritySetContext_NoLock(ctxt, propertyValue);
+#endif /* defined(__MACH__) */
 	
     else if (CFEqual(propertyName, kCFStreamPropertySSLSettings)) {
 
@@ -1491,7 +1514,8 @@ _SocketStreamSetProperty(CFTypeRef stream, CFStringRef propertyName, CFTypeRef p
 				CFDictionaryRemoveValue(ctxt->_properties, kCFStreamPropertySSLSettings);
 		}
     }
-	
+
+#if defined(__MACH__)
 	else if (CFEqual(propertyName, _kCFStreamPropertySocketSecurityAuthenticatesServerCertificate)) {
 		
 		result = TRUE;
@@ -1509,6 +1533,7 @@ _SocketStreamSetProperty(CFTypeRef stream, CFStringRef propertyName, CFTypeRef p
 				CFDictionaryRemoveValue(ctxt->_properties, _kCFStreamPropertySocketSecurityAuthenticatesServerCertificate);
 		}
     }
+#endif /* defined(__MACH__) */
 	
     else if (CFEqual(propertyName, kCFStreamPropertySocketSecurityLevel)) {
 		
@@ -2134,7 +2159,7 @@ _SocksHostCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamErr
 	}
 }
 
-
+#if defined(__MACH__)
 /* static */ void
 _ReachabilityCallBack(SCNetworkReachabilityRef target, const SCNetworkConnectionFlags flags, _CFSocketStreamContext* ctxt) {
 
@@ -2171,8 +2196,9 @@ _ReachabilityCallBack(SCNetworkReachabilityRef target, const SCNetworkConnection
 	/* Unlock */
 	__CFSpinUnlock(&ctxt->_lock);
 }
+#endif /* defined(__MACH__) */
 
-
+#if defined(__MACH__)
 /* static */ void
 _NetworkConnectionCallBack(SCNetworkConnectionRef conn, SCNetworkConnectionStatus status, _CFSocketStreamContext* ctxt) {
 
@@ -2270,7 +2296,7 @@ _NetworkConnectionCallBack(SCNetworkConnectionRef conn, SCNetworkConnectionStatu
 	if (rStream) CFRelease(rStream);
 	if (wStream) CFRelease(wStream);
 }
-
+#endif /* defined(__MACH__) */
 
 /* static */ _CFSocketStreamContext*
 _SocketStreamCreateContext(CFAllocatorRef alloc) {
@@ -3084,8 +3110,8 @@ _SocketStreamCreateSocket_NoLock(_CFSocketStreamContext* ctxt, CFDataRef address
             setsockopt(s, IPPROTO_IP, IP_TTL, (void*)&ttl, sizeof(ttl));
 		}
 		
-#if !defined(__WIN32)
-        /* Turn off SIGPIPE on the socket (SIGPIPE doesn't exist on WIN32) */
+#if defined(__MACH__)
+        /* Turn off SIGPIPE on the socket (SIGPIPE doesn't exist on WIN32 or Linux) */
         setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, (void*)&yes, sizeof(yes));
 #endif
 		
@@ -3351,8 +3377,8 @@ _SocketStreamAttemptNextConnection_NoLock(_CFSocketStreamContext* ctxt) {
 			/* Get the native socket for setting options. */
 			s = CFSocketGetNative(ctxt->_socket);
 			
-#if !defined(__WIN32)
-			/* Turn off SIGPIPE on the socket (SIGPIPE doesn't exist on WIN32) */
+#if defined(__MACH__)
+			/* Turn off SIGPIPE on the socket (SIGPIPE doesn't exist on WIN32 or Linux) */
 			setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, (void*)&yes, sizeof(yes));
 #endif
 			
@@ -3521,7 +3547,7 @@ _SocketStreamCan(_CFSocketStreamContext* ctxt, CFTypeRef stream, int test, CFStr
 	return result;
 }
 
-
+#if defined(__MACH__)
 /* static */ void
 _SocketStreamAddReachability_NoLock(_CFSocketStreamContext* ctxt) {
 	
@@ -3569,11 +3595,12 @@ _SocketStreamAddReachability_NoLock(_CFSocketStreamContext* ctxt) {
 		if (peerAddr) CFRelease(peerAddr);
 	}
 }
-
+#endif /* defined(__MACH__) */
 
 /* static */ void
 _SocketStreamRemoveReachability_NoLock(_CFSocketStreamContext* ctxt) {
-	
+
+#if defined(__MACH__)
 	/* Find out if there is a reachability already. */
 	SCNetworkReachabilityRef reachability = (SCNetworkReachabilityRef)CFDictionaryGetValue(ctxt->_properties, _kCFStreamPropertyNetworkReachability);
 
@@ -3595,6 +3622,7 @@ _SocketStreamRemoveReachability_NoLock(_CFSocketStreamContext* ctxt) {
 		/* Remove it from the properties */
 		CFDictionaryRemoveValue(ctxt->_properties, reachability);
 	}
+#endif /* defined(__MACH__) */
 }
 
 
@@ -3951,6 +3979,7 @@ _SocketStreamAttemptAutoVPN_NoLock(_CFSocketStreamContext* ctxt, CFStringRef nam
 		}
 		
 		else {
+#if defined(__MACH__)
 			CFStringRef service_id = NULL;
 			CFDictionaryRef user_options = NULL;
 
@@ -4002,6 +4031,7 @@ _SocketStreamAttemptAutoVPN_NoLock(_CFSocketStreamContext* ctxt, CFStringRef nam
 			CFRelease(options);
 			if (service_id) CFRelease(service_id);
 			if (user_options) CFRelease(user_options);
+#endif /* defined(__MACH__) */
 		}
 	}
 }
@@ -5630,6 +5660,7 @@ _CONNECTSetInfo_NoLock(_CFSocketStreamContext* ctxt, CFDictionaryRef settings) {
 #pragma mark *SSL Support
 #endif
 
+#if defined(__MACH__)
 /* static */ OSStatus
 _SecurityReadFunc_NoLock(_CFSocketStreamContext* ctxt, void* data, UInt32* dataLength) {
 	
@@ -5782,7 +5813,6 @@ _SecurityWriteFunc_NoLock(_CFSocketStreamContext* ctxt, const void* data, UInt32
 	/* Something bad happened. */
 	return errSSLInternal;
 }
-
 
 /* static */ CFIndex
 _SocketStreamSecuritySend_NoLock(_CFSocketStreamContext* ctxt, const UInt8* buffer, CFIndex length) {
@@ -6513,6 +6543,7 @@ _SocketStreamSecurityGetSessionState_NoLock(_CFSocketStreamContext* ctxt) {
 	SSLSessionState state;
 	return !SSLGetSessionState(ssl, &state) ? state : kSSLAborted;
 }
+#endif /* defined(__MACH__) */
 
 
 #if 0

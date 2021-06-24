@@ -46,7 +46,7 @@
 #if defined(__MACH__)
 #include <JavaScriptGlue/JavaScriptGlue.h>
 #include <SystemConfiguration/SystemConfiguration.h>
-
+#endif /* defined(__MACH__) */
 
 #ifdef __CONSTANT_CFSTRINGS__
 #define _kProxySupportCFNetworkBundleID		CFSTR("com.apple.CFNetwork")
@@ -118,12 +118,12 @@ static CONST_STRING_DECL(_kProxySupportExpiresHeader, "Expires")
 static CONST_STRING_DECL(_kProxySupportNowHeader, "Date")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
-
+#if defined(__MACH__)
 static JSObjectRef _JSDnsResolveFunction(void* context, JSObjectRef ctxt, CFArrayRef args);
 static JSObjectRef _JSPrimaryIpv4AddressesFunction(void* context, JSObjectRef ctxt, CFArrayRef args);
+#endif
 
-#elif defined(__WIN32__)
-
+#if defined(__WIN32__)
 #include <winsock2.h>
 #include <ws2tcpip.h>	// for ipv6
 #include <wininet.h>	// for InternetTimeToSystemTime
@@ -168,18 +168,21 @@ static const char *_CFDLLPath(void) {
 
 #endif	/* __WIN32__ */
 
+#if defined(__MACH__)
 static CFStringRef _JSFindProxyForURL(CFURLRef pac, CFURLRef url, CFStringRef host);
 static CFStringRef _JSFindProxyForURLAsync(CFURLRef pac, CFURLRef url, CFStringRef host, Boolean *mustBlock);
-
+#endif
 
 #define PAC_STREAM_LOAD_TIMEOUT		30.0
 
 static CFReadStreamRef BuildStreamForPACURL(CFAllocatorRef alloc, CFURLRef pacURL, CFURLRef targetURL, CFStringRef targetScheme, CFStringRef targetHost, _CFProxyStreamCallBack callback, void *clientInfo);
 static CFStringRef _loadJSSupportFile(void);
 static CFStringRef _loadPACFile(CFAllocatorRef alloc, CFURLRef pac, CFAbsoluteTime *expires, CFStreamError *err);
+#if defined(__MACH__)
 static JSRunRef _createJSRuntime(CFAllocatorRef alloc, CFStringRef js_support, CFStringRef js_pac);
 static void _freeJSRuntime(JSRunRef runtime);
 static CFStringRef _callPACFunction(CFAllocatorRef alloc, JSRunRef runtime, CFURLRef url, CFStringRef host);
+#endif /* defined(__MACH__) */
 static CFArrayRef _resolveDNSName(CFStringRef name);
 static CFReadStreamRef _streamForPACFile(CFAllocatorRef alloc, CFURLRef pac, Boolean *isFile);
 CFStringRef _stringFromLoadedPACStream(CFAllocatorRef alloc, CFMutableDataRef contents, CFReadStreamRef stream, CFAbsoluteTime *expires);
@@ -583,7 +586,7 @@ static CFURLRef proxyURLForComponents(CFAllocatorRef alloc, CFStringRef scheme, 
     return url;
 }
 
-
+#if defined(__MACH__)
 /* Synchronous if callback == NULL. */
 /* extern */ CFMutableArrayRef
 _CFNetworkFindProxyForURLAsync(CFStringRef scheme, CFURLRef url, CFStringRef host, CFDictionaryRef proxies, _CFProxyStreamCallBack callback, void *clientInfo, CFReadStreamRef *proxyStream) {
@@ -799,6 +802,7 @@ _CFNetworkFindProxyForURLAsync(CFStringRef scheme, CFURLRef url, CFStringRef hos
     if (host) CFRelease(host);
     return result;
 }
+#endif /* defined(__MACH__) */
 
 static void
 _ReadStreamClientCallBack(CFReadStreamRef stream, CFStreamEventType type, CFMutableDataRef contents) {
@@ -1046,7 +1050,7 @@ _loadPACFile(CFAllocatorRef alloc, CFURLRef pac, CFAbsoluteTime *expires, CFStre
 }
 
 
-#if !defined(__WIN32__)
+#if defined(__MACH__)
 
 /* static */ JSRunRef
 _createJSRuntime(CFAllocatorRef alloc, CFStringRef js_support, CFStringRef js_pac) {
@@ -1157,8 +1161,7 @@ _callPACFunction(CFAllocatorRef alloc, JSRunRef runtime, CFURLRef url, CFStringR
     return result;
 }
 
-
-#else
+#elif defined(__WIN32__)
 
 /*
  Doc on scripting interfaces:
@@ -1905,8 +1908,11 @@ _JSPrimaryIpv4AddressesFunction(void) {
 
 static CFURLRef _JSPacFileLocation = NULL;
 static CFAbsoluteTime _JSPacFileExpiration = 0;
+#if defined(__MACH__)
 static JSRunRef _JSRuntime = NULL;
+#endif
 
+#if defined(__MACH__)
 /* Must be called while holding the _JSLock.  It is the caller's responsibility to verify that expires is a valid 
    value; bad values can cause problems.  In general, the caller should make sure to successfully go through
    _stringFromLoadedPACStream to produce the expiry value. */ 
@@ -1933,9 +1939,11 @@ static void _JSSetEnvironmentForPAC(CFAllocatorRef alloc, CFURLRef url, CFAbsolu
         }
     }
 }
+#endif /* defined(__MACH__) */
 
-static CFSpinLock_t _JSLock = 0;
+static CFSpinLock_t _JSLock = CFSpinLockInit;
 
+#if defined(__MACH__)
 /* static */ CFStringRef
 _JSFindProxyForURL(CFURLRef pac, CFURLRef url, CFStringRef host) {
     CFAllocatorRef alloc = CFGetAllocator(pac);
@@ -2004,6 +2012,7 @@ _JSFindProxyForURLAsync(CFURLRef pac, CFURLRef url, CFStringRef host, Boolean *m
 
     return result;
 }
+#endif /* defined(__MACH__) */
 
 // Platform independent piece of the DnsResolve callbacks
 static CFArrayRef
@@ -2215,6 +2224,7 @@ static CFReadStreamRef BuildStreamForPACURL(CFAllocatorRef alloc, CFURLRef pacUR
     return stream;
 }
 
+#if defined(__MACH__) || defined(__WIN32__)
 CFMutableArrayRef _CFNetworkCopyProxyFromProxyStream(CFReadStreamRef proxyStream, Boolean *isComplete) {
     CFStreamStatus status = CFReadStreamGetStatus(proxyStream);
     if (status == kCFStreamStatusOpen && CFReadStreamHasBytesAvailable(proxyStream)) {
@@ -2252,3 +2262,4 @@ CFMutableArrayRef _CFNetworkCopyProxyFromProxyStream(CFReadStreamRef proxyStream
         return NULL;
     }
 }
+#endif /* defined(__MACH__) || defined(__WIN32__) */

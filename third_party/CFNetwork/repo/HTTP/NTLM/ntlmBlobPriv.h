@@ -53,9 +53,11 @@
 #include <CoreFoundation/CFData.h>
 #include <CoreFoundation/CFString.h>
 #include <stdint.h>
+#if defined(__MACH__)
 #include <Security/cssmtype.h>
 #include <Security/SecBase.h>
 #include <CoreServices/CoreServices.h>
+#endif
 
 #ifdef  __cplusplus
 extern "C" {
@@ -242,7 +244,8 @@ void md5Hash(
 	const unsigned char *data,
 	unsigned			dataLen,
 	unsigned char		*digest);		// caller-supplied, NTLM_DIGEST_LENGTH */
-	
+
+#if defined(__MACH__)	
 /*
  * Calculate LM-style password hash. This really only works if the password 
  * is convertible to ASCII.
@@ -301,6 +304,7 @@ OSStatus ntlmHmacMD5(
 	const unsigned char *inData,
 	unsigned			inDataLen,
 	unsigned char		*mac);			// caller provided, NTLM_DIGEST_LENGTH
+#endif /* defined(__MACH__) */
 
 #if NTLM_DUMP
 void ntlmPrintFlags(

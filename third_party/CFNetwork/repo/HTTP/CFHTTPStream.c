@@ -35,6 +35,8 @@
 #include <CFNetwork/CFSocketStreamPriv.h>
 #if defined(__MACH__)
 #include <SystemConfiguration/SCSchemaDefinitions.h> /* For the HTTP proxy keys */
+#endif
+#if defined(__MACH__) || defined(__linux__)
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -168,7 +170,7 @@ static CONST_STRING_DECL(_kCFNTLMMethod, "NTLM")
 
 // Connection cache management; the cache is created and accessed in getConnectionForRequest
 
-static CFSpinLock_t cacheInitLock = 0;
+static CFSpinLock_t cacheInitLock = CFSpinLockInit;
 static CFNetConnectionCacheRef httpConnectionCache = NULL;
 
 static void *httpRequestCreate(CFReadStreamRef stream, void *info);

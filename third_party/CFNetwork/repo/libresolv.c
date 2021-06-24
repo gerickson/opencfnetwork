@@ -29,6 +29,7 @@
  *
  */
 
+#if defined(__MACH__)
 #include <netdb_async.h>
 #include "CFNetworkInternal.h"
 #include <sys/errno.h>
@@ -70,3 +71,4 @@ dns_async_handle_reply(void *msg) {
 
 #undef GET_DYNAMIC_SYMBOL
 #endif	/* DYNAMICALLY_LOAD_LIBRESOLV */
+#endif /* defined(__MACH__) */

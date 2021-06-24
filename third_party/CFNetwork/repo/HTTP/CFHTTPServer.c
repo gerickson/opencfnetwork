@@ -83,6 +83,9 @@
 #define SOCK_MAXADDRLEN 255
 #endif
 
+#ifndef SOCK_MAXADDRLEN
+#define SOCK_MAXADDRLEN 255
+#endif
 
 #if 0
 #pragma mark -
