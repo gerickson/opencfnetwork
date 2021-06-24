@@ -58,10 +58,10 @@ AC_SUBST(abs_top_nlbuild_autotools_dir,[\${abs_top_srcdir}/\${nlbuild_autotools_
 #   No interfaces changed:                     REVISION++
 #
 #
-AC_SUBST(LIBOPENCFNETWORK_VERSION_CURRENT,  [129])
-AC_SUBST(LIBOPENCFNETWORK_VERSION_AGE,      [0])
-AC_SUBST(LIBOPENCFNETWORK_VERSION_REVISION, [20])
-AC_SUBST(LIBOPENCFNETWORK_VERSION_INFO,     [${LIBOPENCFNETWORK_VERSION_CURRENT}:${LIBOPENCFNETWORK_VERSION_REVISION}:${LIBOPENCFNETWORK_VERSION_AGE}])
+AC_SUBST(LIBCFNETWORK_VERSION_CURRENT,  [129])
+AC_SUBST(LIBCFNETWORK_VERSION_AGE,      [0])
+AC_SUBST(LIBCFNETWORK_VERSION_REVISION, [20])
+AC_SUBST(LIBCFNETWORK_VERSION_INFO,     [${LIBCFNETWORK_VERSION_CURRENT}:${LIBCFNETWORK_VERSION_REVISION}:${LIBCFNETWORK_VERSION_AGE}])
 
 #
 # Check the sanity of the source directory by checking for the
@@ -387,6 +387,7 @@ NL_RESTORE_WERROR
 # Identify the various makefiles and auto-generated files for the package
 #
 AC_CONFIG_FILES([
+CFNetwork.pc
 Makefile
 third_party/Makefile
 third_party/CFNetwork/Makefile
@@ -409,7 +410,7 @@ AC_MSG_NOTICE([
   ---------------------
   Package                                   : ${PACKAGE_NAME}
   Version                                   : ${PACKAGE_VERSION}
-  Interface                                 : ${LIBOPENCFNETWORK_VERSION_INFO//:/.}
+  Interface                                 : ${LIBCFNETWORK_VERSION_INFO//:/.}
   Build system                              : ${build}
   Host system                               : ${host}
   Target system                             : ${target}
