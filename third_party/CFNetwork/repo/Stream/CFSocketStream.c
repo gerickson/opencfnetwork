@@ -87,6 +87,8 @@ CONST_STRING_DECL(kCFStreamPropertyShouldCloseNativeSocket, "kCFStreamPropertySh
 
 CONST_STRING_DECL(_kCFStreamPropertySocketPeerName, "_kCFStreamPropertySocketPeerName")
 
+CONST_STRING_DECL(kCFStreamPropertySocketSecurityLevel, "kCFStreamPropertySocketSecurityLevel")
+
 CONST_STRING_DECL(kCFStreamPropertySSLPeerCertificates, "kCFStreamPropertySSLPeerCertificates")
 CONST_STRING_DECL(_kCFStreamPropertySSLClientCertificates, "_kCFStreamPropertySSLClientCertificates")
 CONST_STRING_DECL(_kCFStreamPropertySSLClientCertificateState, "_kCFStreamPropertySSLClientCertificateState")
@@ -99,6 +101,11 @@ CONST_STRING_DECL(kCFStreamSSLIsServer, "kCFStreamSSLIsServer")
 CONST_STRING_DECL(kCFStreamSSLLevel, "kCFStreamSSLLevel")
 CONST_STRING_DECL(kCFStreamSSLPeerName, "kCFStreamSSLPeerName")
 CONST_STRING_DECL(kCFStreamSSLValidatesCertificateChain, "kCFStreamSSLValidatesCertificateChain")
+CONST_STRING_DECL(kCFStreamSocketSecurityLevelNone, "kCFStreamSocketSecurityLevelNone")
+CONST_STRING_DECL(kCFStreamSocketSecurityLevelTLSv1, "kCFStreamSocketSecurityLevelTLSv1")
+CONST_STRING_DECL(kCFStreamSocketSecurityLevelNegotiatedSSL, "kCFStreamSocketSecurityLevelNegotiatedSSL")
+CONST_STRING_DECL(kCFStreamSocketSecurityLevelSSLv2, "kCFStreamSocketSecurityLevelSSLv2")
+CONST_STRING_DECL(kCFStreamSocketSecurityLevelSSLv3, "kCFStreamSocketSecurityLevelSSLv3")
 CONST_STRING_DECL(kCFStreamSocketSecurityLevelTLSv1SSLv3, "kCFStreamSocketSecurityLevelTLSv1SSLv3")
 
 /*!
