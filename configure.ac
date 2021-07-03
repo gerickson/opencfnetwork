@@ -179,6 +179,10 @@ AC_PROG_CXXCPP
 AC_PROG_CXX
 AC_PROG_CXX_C_O
 
+# Assert and enable GNU source extensions, where available.
+
+AC_GNU_SOURCE
+
 # Check for other compiler toolchain tools.
 
 AC_CHECK_TOOL(AR, ar)
@@ -363,6 +367,8 @@ AC_CHECK_MEMBERS(
 
 if test "${ac_no_link}" != "yes"; then
     AC_CHECK_FUNCS([memcpy])
+
+    AC_SEARCH_LIBS([getaddrinfo_a], [anl])
 fi
 
 # Add any CoreFoundation CPPFLAGS, LDFLAGS, and LIBS
