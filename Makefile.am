@@ -28,6 +28,7 @@ include $(abs_top_nlbuild_autotools_dir)/automake/pre.am
 AM_MAKEFLAGS                                     = --no-print-directory
 
 SUBDIRS                                          = \
+    src/include                                    \
     third_party                                    \
     src                                            \
     $(NULL)
@@ -183,6 +184,7 @@ pkgconfig_DATA			= CFNetwork.pc
 # out").
 
 uninstall-hook:
+	-rmdir ${DESTDIR}${docdir}
 	-rmdir ${DESTDIR}${pkgconfigdir}
 
 include $(abs_top_nlbuild_autotools_dir)/automake/post.am
