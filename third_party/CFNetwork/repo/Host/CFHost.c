@@ -990,7 +990,9 @@ _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
 	// Return the CFMachPortRef
 	return result;
 }
+#endif /* #if defined(__MACH__) */
 
+#if defined(__MACH__)
 /* static */ SCNetworkReachabilityRef
 _CreateReachabilityLookup(CFTypeRef thing, void* context, CFStreamError* error) {
 
@@ -1079,6 +1081,7 @@ _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamEr
 
 	return result;
 }
+#endif /* defined(__MACH__) */
 
 /* static */ void
 _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt) {
@@ -1220,6 +1223,7 @@ _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt) {
 	CFRelease((CFHostRef)host);
 }
 
+#if defined(__MACH__)
 /* static */ void
 _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info) {
 
