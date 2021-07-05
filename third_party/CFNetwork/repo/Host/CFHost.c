@@ -1094,26 +1094,30 @@ _GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt) {
 			}
 
 			else {
-				struct addrinfo* i;
-
+				const struct addrinfo* i;
+				
 				// Loop through all of the addresses saving them in the array.
 				for (i = res; i; i = i->ai_next) {
 
-					CFDataRef data;
-
+					CFDataRef data = NULL;
+					CFIndex length = 0;
+					
 					// Bypass any address families that are not understood by CFSocketStream
 					if (i->ai_addr->sa_family != AF_INET && i->ai_addr->sa_family != AF_INET6)
 						continue;
 
 					// Wrap the address in a CFData
 #if defined(__MACH__)
-					data = CFDataCreate(allocator, (UInt8*)(i->ai_addr), i->ai_addr->sa_len);
+					length = i->ai_addr->sa_len;
 #else
 					if (i->ai_addr->sa_family == AF_INET)
-						data = CFDataCreate(allocator, (UInt8*)(i->ai_addr), sizeof(struct sockaddr_in));
+						length = sizeof(struct sockaddr_in);
 					else if (i->ai_addr->sa_family == AF_INET6)
-						data = CFDataCreate(allocator, (UInt8*)(i->ai_addr), sizeof(struct sockaddr_in6));
+						length = sizeof(struct sockaddr_in6);
 #endif /* defined(__MACH__) */
+					if (length > 0) {
+						data = CFDataCreate(allocator, (UInt8*)(i->ai_addr), length);
+					}
 
 					// Fail with a memory error if the address wouldn't wrap.
 					if (!data) {
@@ -1169,12 +1173,14 @@ _GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt) {
 	__CFSpinUnlock(&host->_lock);
 
 	// Release the results if some were received.
-    if (res)
-        freeaddrinfo(res);
+    if (res) {
+        freeaddrinfo((struct addrinfo *)res);
+	}
 
 	// If there is a callback, inform the client of the finish.
-	if (cb)
+	if (cb) {
 		cb((CFHostRef)host, type, &error, info);
+	}
 
 	// Go ahead and release now that the callback is done.
 	CFRelease((CFHostRef)host);
