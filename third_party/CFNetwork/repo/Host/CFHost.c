@@ -80,6 +80,7 @@
 #include "opencfnetwork-config.h"
 #endif
 
+#include <AssertMacros.h>
 #include <CFNetwork/CFNetwork.h>
 #include <CFNetwork/CFNetworkPriv.h>
 #include "CFNetworkInternal.h"							/* for __CFSpinLock and __CFSpinUnlock */
@@ -87,13 +88,21 @@
 
 #include <math.h>										/* for fabs */
 #include <sys/socket.h>
-#if defined(__MACH__)
-#include <netdb_async.h>
-#include <SystemConfiguration/SystemConfiguration.h>	/* for SCNetworkReachability and flags */
-#elif defined(__linux__)
-#include <netdb.h>
-#endif
 
+#if defined(__MACH__)
+# include <netdb_async.h>
+# include <SystemConfiguration/SystemConfiguration.h>	/* for SCNetworkReachability and flags */
+#elif defined(__linux__)
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE 1                                  /* for getaddrinfo_a */
+#endif /* _GNU_SOURCE */
+# include <arpa/inet.h>
+# include <netdb.h>
+# include <signal.h>
+# include <sys/signalfd.h>
+# include <sys/syscall.h>
+# include <unistd.h>
+#endif /* defined(__MACH__) */
 
 #if 0
 #pragma mark -
@@ -114,14 +123,14 @@
 	__CFHostMaybeLog(dir " %s\n", name)
 #define __CFHostMaybeTraceWithFormat(dir, name, format, ...)	\
 	__CFHostMaybeLog(dir " %s " format, name, ##__VA_ARGS__)
-#define __CFHostEnterWithFormat(format, ...)                    \
+#define __CFHostTraceEnterWithFormat(format, ...)               \
 	__CFHostMaybeTraceWithFormat("-->", __func__, format, ##__VA_ARGS__)
-#define __CFHostExitWithFormat(format, ...)                     \
+#define __CFHostTraceExitWithFormat(format, ...)                \
 	__CFHostMaybeTraceWithFormat("<--", __func__, format, ##__VA_ARGS__)
-#define __CFHostEnter()                                         \
-	__CFHostEnterWithFormat("")
-#define __CFHostExit()                                          \
-	__CFHostExitWithFormat("")
+#define __CFHostTraceEnter()                                    \
+	__CFHostTraceEnterWithFormat("")
+#define __CFHostTraceExit()                                     \
+	__CFHostTraceExitWithFormat("")
 
 /* extern */ const SInt32 kCFStreamErrorDomainNetDB = 12;
 /* extern */ const SInt32 kCFStreamErrorDomainSystemConfiguration = 13;
@@ -150,11 +159,22 @@ CONST_STRING_DECL_LOCAL(_kCFHostBlockingMode, "_kCFHostBlockingMode")
 CONST_STRING_DECL_LOCAL(_kCFHostDescribeFormat, "<CFHost 0x%x>{info=%@}")
 #endif	/* __CONSTANT_CFSTRINGS__ */
 
+#if defined(__linux__)
+#define __kCFHostLinuxSignalFdSignal ((int)SIGRTMIN + 11)
+#endif
 
 #if 0
 #pragma mark -
 #pragma mark CFHost struct
 #endif
+
+#if defined(__linux__)
+typedef struct {
+	struct gaicb    _request_gaicb;
+	struct addrinfo _request_hints;
+	struct gaicb *  _request_list[1];
+} _CFGAIARequest;
+#endif /* defined(__linux__) */
 
 typedef struct {
 
@@ -196,9 +216,22 @@ static Boolean _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean*
 static UInt8* _CreateLookup_Common(CFTypeRef thing, CFStreamError* error);
 static void _HandleGetAddrInfoStatus(int eai_status, CFStreamError* error, Boolean intuitStatus);
 static void _InitGetAddrInfoHints(CFHostInfoType info, struct addrinfo *hints);
+static CFTypeRef _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
 #if defined(__MACH__)
-static CFMachPortRef _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
+static CFMachPortRef _CreatePrimaryAddressLookup_Mach(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
 #endif
+#if defined(__linux__)
+static int _SignalFdModifySignalWithError(int how, int signal, sigset_t *set, CFStreamError *error);
+static int _SignalFdSetSignalWithError(int signal, sigset_t *set, CFStreamError *error);
+static int _SignalFdClearSignalWithError(int signal, sigset_t *set, CFStreamError *error);
+static int _SignalFdClearGetAddrInfoSignalWithHost(_CFHost *host);
+static int _CreateSignalFd(int signal, CFStreamError *error);
+static int _CreateAddressLookupRequest(const char *name, CFHostInfoType info, int signal, CFStreamError *error);
+static struct gaicb * _SignalFdGetAddrInfoResult(CFFileDescriptorRef fdref);
+static void _PrimaryAddressLookupCallBack_Linux(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
+static CFFileDescriptorRef _CreateAddressLookupSource(int signal, CFTypeRef context, CFStreamError *error);
+static CFFileDescriptorRef _CreatePrimaryAddressLookup_Linux(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
+#endif /* defined(__linux__) */
 static CFTypeRef _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStreamError* error);
 #if defined(__MACH__)
 static CFMachPortRef _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error);
@@ -216,8 +249,8 @@ static void _GetNameInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex 
 #endif
 #if defined(__MACH__)
 static void _NetworkReachabilityCallBack(SCNetworkReachabilityRef target, SCNetworkConnectionFlags flags, void* ctxt);
-#endif
 static void _NetworkReachabilityByIPCallBack(_CFHost* host);
+#endif /* defined(__MACH__) */
 
 static void _DNSCallBack(int32_t status, char *buf, uint32_t len, struct sockaddr *from, int fromlen, void *context);
 #if defined(__MACH__)
@@ -230,7 +263,9 @@ static void _AddressLookupPerform(_CFHost* host);
 static void _ExpireCacheEntries(void);
 
 static CFArrayRef _CFArrayCreateDeepCopy(CFAllocatorRef alloc, CFArrayRef array);
+#if defined(__MACH__)
 static Boolean _IsDottedIp(CFStringRef name);
+#endif
 
 
 #if 0
@@ -838,9 +873,24 @@ _InitGetAddrInfoHints(CFHostInfoType info, struct addrinfo *hints)
  *    success; otherwise, NULL.
  *
  */
+/* static */ CFTypeRef
+_CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
+	CFTypeRef result = NULL;
+
+#if defined(__MACH__)
+	result = _CreatePrimaryAddressLookup_Mach(name, info, context, error);
+#elif defined(__linux__)
+	result = _CreatePrimaryAddressLookup_Linux(name, info, context, error);
+#else
+#warning "Platform portability issue!"
+#endif
+
+	return result;
+}
+
 #if defined(__MACH__)
 /* static */ CFMachPortRef
-_CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
+_CreateMasterAddressLookup_Mach(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
 
 	const CFAllocatorRef allocator = CFGetAllocator(name);
 	UInt8* buffer;
@@ -877,7 +927,271 @@ _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef cont
 
 	return result;
 }
-#endif /* #if defined(__MACH__) */
+#endif /* defined(__MACH__) */
+
+#if defined(__linux__)
+/* static */ int
+_SignalFdModifySignalWithError(int how, int signal, sigset_t *set, CFStreamError *error)
+{
+	int       result;
+
+	__CFHostTraceEnterWithFormat("how %d signal %d set %p error %p\n",
+								 how, signal, set, error);
+
+	__Require(set != NULL, done);
+	__Require(error != NULL, done);
+
+	sigemptyset(set);
+	sigaddset(set, signal);
+
+	result = pthread_sigmask(how, set, NULL);
+	__Require_Action(result == 0,
+					 done,
+					 error->error = result;
+					 error->domain = kCFStreamErrorDomainPOSIX);
+
+ done:
+	__CFHostTraceExitWithFormat("result %d\n", result);
+
+	return result;
+}
+
+/* static */ int
+_SignalFdSetSignalWithError(int signal, sigset_t *set, CFStreamError *error) {
+	return (_SignalFdModifySignalWithError(SIG_BLOCK, signal, set, error));
+}
+
+/* static */ int
+_SignalFdClearSignalWithError(int signal, sigset_t *set, CFStreamError *error) {
+	return (_SignalFdModifySignalWithError(SIG_UNBLOCK, signal, set, error));
+}
+
+/* static */ int
+_SignalFdClearGetAddrInfoSignalWithHost(_CFHost *host) {
+	const int signal = __kCFHostLinuxSignalFdSignal;
+	sigset_t  sigset;
+	int       result;
+
+	__CFSpinLock(&host->_lock);
+
+	result = _SignalFdClearSignalWithError(signal, &sigset, &host->_error);
+
+	__CFSpinUnlock(&host->_lock);
+
+	return result;
+}
+
+/* static */ int
+_CreateSignalFd(int signal, CFStreamError *error) {
+	const int kInvalidExistingDescriptor = -1;
+	const int flags = 0;
+	sigset_t  sigset;
+	int       status;
+	int       result = -1;
+
+	__CFHostTraceEnterWithFormat("signal %d error %p\n", signal, error);
+
+	status = _SignalFdSetSignalWithError(signal, &sigset, error);
+	__Require(status == 0, done);
+
+	result = signalfd(kInvalidExistingDescriptor, &sigset, flags);
+	__Require_Action(result != -1,
+					 done,
+					 error->error  = errno;
+					 error->domain = kCFStreamErrorDomainPOSIX);
+
+ done:
+	__CFHostTraceExitWithFormat("result %d\n", result);
+
+	return result;
+}
+
+/* static */ int
+_CreateAddressLookupRequest(const char *name, CFHostInfoType info, int signal, CFStreamError *error) {
+	struct sigevent  sigev;
+	_CFGAIARequest * gai_request = NULL;
+	int              result = -1;
+
+	__CFHostTraceEnterWithFormat("name %p (%s) info 0x%x signal %d error %p\n",
+								 name, (name != NULL) ? name : "", info, signal, error);
+
+	__Require_Action(name != NULL, done, result = -EINVAL);
+
+	memset(&sigev, 0, sizeof(sigev));
+  
+	gai_request = (_CFGAIARequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(gai_request), 0);
+	__Require_Action(gai_request != NULL,
+					 done,
+					 result        = -ENOMEM;
+					 error->error  = -result;
+					 error->domain = kCFStreamErrorDomainPOSIX);
+
+	_InitGetAddrInfoHints(info, &gai_request->_request_hints);
+
+	memset(&gai_request->_request_gaicb, 0, sizeof(struct gaicb));
+
+	gai_request->_request_gaicb.ar_name     = name;
+	gai_request->_request_gaicb.ar_request  = &gai_request->_request_hints;
+
+	gai_request->_request_list[0]           = &gai_request->_request_gaicb;
+
+	sigev.sigev_notify          = SIGEV_SIGNAL;
+	sigev.sigev_value.sival_ptr = &gai_request->_request_gaicb;
+	sigev.sigev_signo           = signal;
+
+	result = getaddrinfo_a(GAI_NOWAIT, gai_request->_request_list, 1, &sigev);
+	if (result != 0) {
+		_HandleGetAddrInfoStatus(result, error, TRUE);
+
+		CFAllocatorDeallocate(kCFAllocatorDefault, gai_request);
+	}
+
+ done:
+	__CFHostTraceExitWithFormat("result %d\n", result);
+
+	return result;
+}
+
+/* static */ struct gaicb *
+_SignalFdGetAddrInfoResult(CFFileDescriptorRef fdref) {
+	CFFileDescriptorNativeDescriptor fd;
+	struct signalfd_siginfo          fdsi;
+	ssize_t                          status;
+	struct gaicb *                   result = NULL;
+
+	__CFHostTraceEnterWithFormat("fdref %p\n", fdref);
+
+    fd = CFFileDescriptorGetNativeDescriptor(fdref);
+    __Require(fd != -1, done);
+
+	do {
+		status = read(fd, &fdsi, sizeof(fdsi));
+	} while ((status == -1) && (errno == EAGAIN));
+	__Require(status == sizeof(fdsi), done);
+
+	__Require(fdsi.ssi_signo == __kCFHostLinuxSignalFdSignal, done);
+	__Require(fdsi.ssi_code == SI_ASYNCNL, done);
+
+	result = (struct gaicb *)(fdsi.ssi_ptr);
+	__Require(result != NULL, done);
+
+ done:
+	__CFHostTraceExitWithFormat("result %p\n", result);
+
+	return result;
+}
+
+/* static */ void
+_PrimaryAddressLookupCallBack_Linux(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info) {
+	int            status;
+	struct gaicb * request = NULL;
+
+	__CFHostTraceEnterWithFormat("fdref %p callBackTypes %lx info %p\n",
+								 fdref, callBackTypes, info);
+
+	// Attempt to retrieve the getaddrinfo_a result that fired the
+	// completion signal that triggered this callback.
+
+	request = _SignalFdGetAddrInfoResult(fdref);
+	__Require(request != NULL, done);
+
+	// Invoke the common, shared getaddrinfo{,_a} callback.
+
+	_GetAddrInfoCallBack(gai_error(request), request->ar_result, info);
+
+	// Release the buffer that was previously allocated for the lookup
+	// name when the request was made as well as the request itself.
+
+	CFAllocatorDeallocate(kCFAllocatorDefault, (void *)request->ar_name);
+	CFAllocatorDeallocate(kCFAllocatorDefault, request);
+
+ done:
+	// Clear the signal we previously established to trigger this callback.
+
+	status = _SignalFdClearGetAddrInfoSignalWithHost(info);
+	__Verify(status == 0);
+
+	CFFileDescriptorInvalidate(fdref);
+	CFRelease(fdref);
+
+	__CFHostTraceExit();
+}
+
+/* static */ CFFileDescriptorRef
+_CreateAddressLookupSource(int signal, CFTypeRef context, CFStreamError *error) {
+	const Boolean           kCloseOnInvalidate = TRUE;
+	int                     sigfd;
+    CFFileDescriptorContext fdrefContext = { 0, (void *)context, NULL, NULL, NULL };
+	CFFileDescriptorRef     result = NULL;
+
+	__CFHostTraceEnterWithFormat("signal %d context %p error %p\n", signal, context, error);	
+
+	sigfd = _CreateSignalFd(signal, error);
+	__Require(sigfd != -1, done);
+
+	result = CFFileDescriptorCreate(kCFAllocatorDefault,
+									sigfd,
+									kCloseOnInvalidate,
+									_PrimaryAddressLookupCallBack_Linux,
+									&fdrefContext);
+	if (!result) {
+		error->error = ENOMEM;
+		error->domain = kCFStreamErrorDomainPOSIX;
+
+		close(sigfd);
+
+	} else {
+		CFFileDescriptorEnableCallBacks(result, kCFFileDescriptorReadCallBack);
+
+	}
+
+ done:
+	__CFHostTraceExitWithFormat("result %p\n", result);
+
+	return result;
+}
+
+/* static */ CFFileDescriptorRef
+_CreatePrimaryAddressLookup_Linux(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
+	const CFAllocatorRef    allocator = CFGetAllocator(name);
+	UInt8*                  buffer;
+	const int               signal = __kCFHostLinuxSignalFdSignal;
+	CFFileDescriptorRef     result = NULL;
+	int                     status;
+
+	__CFHostTraceEnterWithFormat("name %p info %x context %p error %p\n",
+							name, info, context, error);
+
+	// Create a CFString representation of the lookup by converting it
+	// into a null-terminated C string buffer consumable by
+	// getaddrinfo_a.
+
+	buffer = _CreateLookup_Common(name, error);
+	__Require(buffer != NULL, done);
+
+	// Create the CFFileDescriptor-based lookup source that will
+	// handle the I/O for the asynchronous getaddrinfo_a call.
+
+	result = _CreateAddressLookupSource(signal, context, error);
+	__Require_Action(result != NULL, done, CFAllocatorDeallocate(allocator, buffer));
+
+	status = _CreateAddressLookupRequest((const char *)buffer, info, signal, error);
+	if (status != 0) {
+		_HandleGetAddrInfoStatus(status, error, TRUE);
+
+		CFAllocatorDeallocate(allocator, buffer);
+		CFFileDescriptorInvalidate(result);
+		CFRelease(result);
+
+		result = NULL;
+	}
+
+ done:
+	__CFHostTraceExitWithFormat("result %p\n", result);
+
+	return result;
+}
+#endif /* #if defined(__linux__) */
 
 /* static */ CFTypeRef
 _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStreamError* error) {
@@ -1111,7 +1425,9 @@ _CreateReachabilityLookup(CFTypeRef thing, void* context, CFStreamError* error) 
 
 	return result;
 }
+#endif /* defined(__MACH__) */
 
+#if defined(__MACH__)
 /* static */ CFMachPortRef
 _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamError* error) {
 	const CFAllocatorRef allocator = CFGetAllocator(thing);
@@ -1464,6 +1780,7 @@ _NetworkReachabilityCallBack(SCNetworkReachabilityRef target, SCNetworkConnectio
 }
 #endif /* #if defined(__MACH__) */
 
+#if defined(__MACH__)
 /* static */ void
 _NetworkReachabilityByIPCallBack(_CFHost* host) {
 
@@ -1510,6 +1827,7 @@ _NetworkReachabilityByIPCallBack(_CFHost* host) {
 	// Go ahead and release now that the callback is done.
 	CFRelease((CFHostRef)host);
 }
+#endif /* defined(__MACH__) */
 
 #if defined(__MACH__)
 /* static */ void
@@ -1959,7 +2277,7 @@ _CFArrayCreateDeepCopy(CFAllocatorRef alloc, CFArrayRef array) {
     return result;
 }
 
-
+#if defined(__MACH__)
 /* static */ Boolean
 _IsDottedIp(CFStringRef name) {
 
@@ -1996,7 +2314,7 @@ _IsDottedIp(CFStringRef name) {
 
 	return result;
 }
-
+#endif /* defined(__MACH__) */
 
 #if 0
 #pragma mark -
