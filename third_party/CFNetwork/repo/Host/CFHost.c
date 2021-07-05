@@ -40,13 +40,13 @@
 	cause registration of the class.
 
 	CFHost's underlying lookups can be any asynchronous CFType (i.e. CFMachPort, CFSocket,
-	SCNetworkReachability, etc.).  The lookup should be created and scheduled on the run
-	loops and modes saved in the "schedules" array.  The array is maintained in order to
-	allow scheduling separate from the lookup.  With this, lookup can be created after
-	schedules have been placed on the object.  The lookup can then be scheduled the same
-	as the object.  The schedules array contains a list of pairs of run loops and modes
-	(e.g. [<rl1>, <mode1>, <rl2>, <mode2>, ...]).  There can be zero or more items in
-	the array, but the count should always be divisible by 2.
+	CFFileDescriptor, SCNetworkReachability, etc.).  The lookup should be created and
+	scheduled on the run loops and modes saved in the "schedules" array.  The array is
+	maintained in order to allow scheduling separate from the lookup.  With this, lookup
+	can be created after schedules have been placed on the object.  The lookup can then be
+	scheduled the same as the object.  The schedules array contains a list of pairs of run
+	loops and modes (e.g. [<rl1>, <mode1>, <rl2>, <mode2>, ...]).  There can be zero or more
+	items in the array, but the count should always be divisible by 2.
 
 	A cancel is just another type of lookup.  A custom CFRunLoopSource is created which
 	is simply signalled instantly.  This will cause synchronous lookups on other run loops
@@ -774,6 +774,47 @@ _InitGetAddrInfoHints(CFHostInfoType info, struct addrinfo *hints)
 	hints->ai_flags      = ai_flags;
 }
 
+/**
+ *  @brief
+ *    Initiate and create the first domain name resolution lookup for
+ *    a given host name.
+ *
+ *  Per the discussion at file scope, the first lookup that is
+ *  performed creates a "master", or primary, lookup. The primary
+ *  lookup is just another CFHostRef whose lookup is started as a
+ *  special info type. This signals to it that it is the primary and
+ *  that there are clients of it.  The primary is then placed in a
+ *  global dictionary of outstanding lookups.  When a second is
+ *  started, it is checked for existance in the global list.  If/when
+ *  found, the second request is added to the list of clients.  The
+ *  primary lookup is scheduled on all loops and modes as the list of
+ *  clients.  When the primary lookup completes, all clients in the
+ *  list are informed.  If all clients cancel, the primary lookup will
+ *  be canceled and removed from the primary lookups list.
+ *
+ *  @param[in]      name     A reference to a string containing a host
+ *                           name or IP address that is to be lookedup
+ *                           and/or resolved.
+ *  @param[in]      info     A value of type CFHostInfoType
+ *                           specifying the type of information that
+ *                           is to be retrieved. See #CFHostInfoType
+ *                           for possible values.
+ *  @param[in]      context  A pointer to user-supplied context to be
+ *                           returned to the caller on completion of the
+ *                           lookup.
+ *  @param[in,out]  error    A pointer to a #CFStreamError structure,
+ *                           that if an error occurs, is set to the
+ *                           error and the error's domain. In
+ *                           synchronous mode, the error indicates why
+ *                           resolution failed, and in asynchronous
+ *                           mode, the error indicates why resolution
+ *                           failed to start.
+ *
+ *  @returns
+ *    The asynchronous, schedulable CFType for the lookup operation on
+ *    success; otherwise, NULL.
+ *
+ */
 #if defined(__MACH__)
 /* static */ CFMachPortRef
 _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
