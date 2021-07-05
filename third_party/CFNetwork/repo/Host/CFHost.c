@@ -165,6 +165,7 @@ static Boolean _HostBlockUntilComplete(_CFHost* host);
 
 static Boolean _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176);
 
+static void _HandleGetAddrInfoStatus(int eai_status, CFStreamError* error, Boolean intuitStatus);
 static void _InitGetAddrInfoHints(CFHostInfoType info, struct addrinfo *hints);
 #if defined(__MACH__)
 static CFMachPortRef _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
@@ -673,6 +674,36 @@ _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176)
 }
 
 /* static */ void
+_HandleGetAddrInfoStatus(int eai_status, CFStreamError* error, Boolean intuitStatus)
+{
+	if (eai_status != 0) {
+		// If it's a system error, get the real error otherwise it's a
+		// NetDB error.
+		if (eai_status == EAI_SYSTEM) {
+			error->error  = errno;
+			error->domain = kCFStreamErrorDomainPOSIX;
+		} else {
+			error->error  = eai_status;
+			error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
+		}
+	}
+
+	else if (intuitStatus) {
+		// No error set, see if errno has anything.  If so, mark the error as
+		// a POSIX error.
+	    if (errno != 0) {
+			error->error  = errno;
+			error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainPOSIX;
+
+			// Don't know what happened, so mark it as an internal netdb error.
+		} else {
+			error->error  = NETDB_INTERNAL;
+			error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
+		}
+	}
+}
+
+/* static */ void
 _InitGetAddrInfoHints(CFHostInfoType info, struct addrinfo *hints)
 {
 #ifdef AI_PARALLEL
@@ -745,30 +776,7 @@ _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef cont
 		if (!prt ||
 			!(result = CFMachPortCreateWithPort(allocator, prt, _GetAddrInfoMachPortCallBack, &ctxt, NULL)))
 		{
-			
-			// Failure somewhere so setup error the proper way.  If error->error is
-			// set already, it was a netdb error.
-			if (error->error) {
-				
-				/* If it's a system error, get the real error otherwise it's a NetDB error. */
-				if (EAI_SYSTEM != error->error)
-					error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
-				else {
-					error->error = errno;
-					error->domain = kCFStreamErrorDomainPOSIX;
-				}
-			}
-			
-			// No error set, see if errno has anything.  If so, mark the error as
-			// a POSIX error.
-			else if (error->error = errno)
-				error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainPOSIX;
-				
-			// Don't know what happened, so mark it as an internal netdb error.
-			else {
-				error->error = NETDB_INTERNAL;
-				error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
-			}
+			_HandleGetAddrInfoStatus(error->error, error, TRUE);
 		}
 	}
 	
@@ -924,30 +932,7 @@ _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
 	if (!prt ||
 		!(result = CFMachPortCreateWithPort(CFGetAllocator(address), prt, _GetNameInfoMachPortCallBack, &ctxt, NULL)))
 	{
-		
-		// Failure somewhere so setup error the proper way.  If error->error is
-		// set already, it was a netdb error.
-		if (error->error) {
-			
-			/* If it's a system error, get the real error otherwise it's a NetDB error. */
-			if (EAI_SYSTEM != error->error)
-				error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
-			else {
-				error->error = errno;
-				error->domain = kCFStreamErrorDomainPOSIX;
-			}
-		}
-		
-		// No error set, see if errno has anything.  If so, mark the error as
-		// a POSIX error.
-		else if (error->error = errno)
-			error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainPOSIX;
-			
-		// Don't know what happened, so mark it as an internal netdb error.
-		else {
-			error->error = NETDB_INTERNAL;
-			error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
-		}
+		_HandleGetAddrInfoStatus(error->error, error, TRUE);
 	}
 
 	// Return the CFMachPortRef
@@ -1074,30 +1059,7 @@ _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamEr
 		if (!prt ||
 			!(result = CFMachPortCreateWithPort(allocator, prt, _DNSMachPortCallBack, &ctxt, NULL)))
 		{
-			
-			// Failure somewhere so setup error the proper way.  If error->error is
-			// set already, it was a netdb error.
-			if (error->error) {
-				
-				/* If it's a system error, get the real error otherwise it's a NetDB error. */
-				if (EAI_SYSTEM != error->error)
-					error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
-				else {
-					error->error = errno;
-					error->domain = kCFStreamErrorDomainPOSIX;
-				}
-			}
-			
-			// No error set, see if errno has anything.  If so, mark the error as
-			// a POSIX error.
-			else if (error->error = errno)
-				error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainPOSIX;
-			
-			// Don't know what happened, so mark it as an internal netdb error.
-			else {
-				error->error = NETDB_INTERNAL;
-				error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
-			}
+			_HandleGetAddrInfoStatus(error->error, error, TRUE);
 		}
 	}
 	
@@ -1131,17 +1093,7 @@ _GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt) {
 		
 		// Set the error if got one back from getaddrinfo
 		if (status) {
-			
-			/* If it's a system error, get the real error. */
-			if (EAI_SYSTEM == status) {
-				host->_error.error = errno;
-				host->_error.domain = kCFStreamErrorDomainPOSIX;
-			}
-			
-			else {
-				host->_error.error = status;
-				host->_error.domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
-			}
+			_HandleGetAddrInfoStatus(status, &host->_error, FALSE);
 			
 			// Mark to indicate the resolution was performed.
 			CFDictionaryAddValue(host->_info, (const void*)(host->_type), kCFNull);
@@ -1280,17 +1232,7 @@ _GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt) {
 		
 		// Set the error if got one back from getnameinfo
 		if (status) {
-			
-			/* If it's a system error, get the real error. */
-			if (EAI_SYSTEM == status) {
-				host->_error.error = errno;
-				host->_error.error = kCFStreamErrorDomainPOSIX;
-			}
-			
-			else {
-				host->_error.error = status;
-				host->_error.domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
-			}
+			_HandleGetAddrInfoStatus(status, &host->_error, FALSE);
 			
 			// Mark to indicate the resolution was performed.
 			CFDictionaryAddValue(host->_info, (const void*)kCFHostNames, kCFNull);
@@ -1509,17 +1451,7 @@ _DNSCallBack(int32_t status, char *buf, uint32_t len, struct sockaddr *from, int
 		
 		// Set the error if got one back from the lookup
 		if (status) {
-			
-			/* If it's a system error, get the real error. */
-			if (EAI_SYSTEM == status) {
-				host->_error.error = errno;
-				host->_error.domain = kCFStreamErrorDomainPOSIX;
-			}
-			
-			else {
-				host->_error.error = status;
-				host->_error.domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
-			}
+			_HandleGetAddrInfoStatus(status, &host->_error, FALSE);
 			
 			// Mark to indicate the resolution was performed.
 			CFDictionaryAddValue(host->_info, (const void*)(host->_type), kCFNull);
