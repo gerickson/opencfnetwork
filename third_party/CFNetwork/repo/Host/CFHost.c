@@ -183,7 +183,7 @@ static SCNetworkReachabilityRef _CreateReachabilityLookup(CFTypeRef thing, void*
 static CFMachPortRef _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamError* error);
 #endif /* #if defined(__MACH__) */
 
-static void _GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt);
+static void _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt);
 #if defined(__MACH__)
 static void _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 #endif
@@ -1081,7 +1081,7 @@ _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamEr
 }
 
 /* static */ void
-_GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt) {
+_GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt) {
 
 	_CFHost* host = (_CFHost*)ctxt;
 	CFHostClientCallBack cb = NULL;
@@ -1103,8 +1103,8 @@ _GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt) {
 		CFDictionaryRemoveValue(host->_info, (const void*)(host->_type));
 
 		// Set the error if got one back from getaddrinfo
-		if (status) {
-			_HandleGetAddrInfoStatus(status, &host->_error, FALSE);
+		if (eai_status) {
+			_HandleGetAddrInfoStatus(eai_status, &host->_error, FALSE);
 
 			// Mark to indicate the resolution was performed.
 			CFDictionaryAddValue(host->_info, (const void*)(host->_type), kCFNull);
