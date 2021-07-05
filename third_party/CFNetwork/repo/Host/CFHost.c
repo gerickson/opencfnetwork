@@ -817,7 +817,7 @@ _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef cont
 
 /* static */ CFTypeRef
 _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStreamError* error) {
-
+	Boolean started = FALSE;
 	CFTypeRef result = NULL;
 
 	memset(error, 0, sizeof(error[0]));
@@ -884,19 +884,43 @@ _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStr
 					CFHostSetClient(host, (CFHostClientCallBack)_MasterCallBack, &ctxt);
 
 					/* Kick off the resolution.  NULL the client if the resolution can't start. */
-					if (!CFHostStartInfoResolution(host, _kCFHostMasterAddressLookup, error)) {
+					started = CFHostStartInfoResolution(host, _kCFHostMasterAddressLookup, error);
+					if (!started) {
+
+						// It is absolutely imperative that
+						// CFHostStartInfoResolution (or its
+						// info-type-specific helpers) set an error of
+						// some sort if it (they) failed. In response
+						// to failure, the name/list key/value pair
+						// will be removed from _HostLookups and,
+						// along with them, the host will then be
+						// invalid and go out of scope.
+						//
+						// If processing continues on the false
+						// assumption that there were no errors,
+						// execution flow will fault when the newly
+						// created run loop source below is added to a
+						// list that is no longer valid.
+
+						// CFAssert2(error->error != 0, __kCFLogAssertion, ""resolution failed but error is not set");
 
 						CFHostSetClient(host, NULL, NULL);
 
 						/* If it failed, don't keep it in the outstanding lookups list. */
 						CFDictionaryRemoveValue(_HostLookups, name);
+
+						// Name, host, and list are no longer valid
+						// and in scope at this point. A stream error
+						// MUST be set, per the comment above or any
+						// manipulation of name, list, or host
+						// hereafter will fault.
 					}
 				}
 			}
 		}
 
 		/* Everything is still good? */
-		if (!error->error) {
+		if (started && !error->error) {
 
 			CFRunLoopSourceContext ctxt = {
 				0,
