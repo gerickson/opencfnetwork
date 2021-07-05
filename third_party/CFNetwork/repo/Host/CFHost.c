@@ -75,6 +75,11 @@
 #pragma mark -
 #pragma mark Includes
 #endif
+
+#if HAVE_CONFIG_H
+#include "opencfnetwork-config.h"
+#endif
+
 #include <CFNetwork/CFNetwork.h>
 #include <CFNetwork/CFNetworkPriv.h>
 #include "CFNetworkInternal.h"							/* for __CFSpinLock and __CFSpinUnlock */
