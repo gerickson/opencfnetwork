@@ -100,6 +100,29 @@
 #pragma mark Constants
 #endif
 
+#if !defined(LOG_CFHOST)
+#define LOG_CFHOST 0
+#endif
+
+#if LOG_CFHOST
+#define __CFHostMaybeLog(format, ...)  do { fprintf(stderr, format, ##__VA_ARGS__); fflush(stderr); } while (0)
+#else
+#define __CFHostMaybeLog(format, ...)
+#endif
+
+#define __CFHostMaybeTrace(dir, name)                           \
+	__CFHostMaybeLog(dir " %s\n", name)
+#define __CFHostMaybeTraceWithFormat(dir, name, format, ...)	\
+	__CFHostMaybeLog(dir " %s " format, name, ##__VA_ARGS__)
+#define __CFHostEnterWithFormat(format, ...)                    \
+	__CFHostMaybeTraceWithFormat("-->", __func__, format, ##__VA_ARGS__)
+#define __CFHostExitWithFormat(format, ...)                     \
+	__CFHostMaybeTraceWithFormat("<--", __func__, format, ##__VA_ARGS__)
+#define __CFHostEnter()                                         \
+	__CFHostEnterWithFormat("")
+#define __CFHostExit()                                          \
+	__CFHostExitWithFormat("")
+
 /* extern */ const SInt32 kCFStreamErrorDomainNetDB = 12;
 /* extern */ const SInt32 kCFStreamErrorDomainSystemConfiguration = 13;
 
