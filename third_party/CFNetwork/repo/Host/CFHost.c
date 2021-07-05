@@ -165,6 +165,7 @@ static Boolean _HostBlockUntilComplete(_CFHost* host);
 
 static Boolean _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176);
 
+static void _InitGetAddrInfoHints(CFHostInfoType info, struct addrinfo *hints);
 #if defined(__MACH__)
 static CFMachPortRef _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
 #endif
@@ -671,6 +672,29 @@ _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176)
 	return result;
 }
 
+/* static */ void
+_InitGetAddrInfoHints(CFHostInfoType info, struct addrinfo *hints)
+{
+#ifdef AI_PARALLEL
+	const int ai_flags = AI_ADDRCONFIG | AI_PARALLEL;
+#else
+	const int ai_flags = AI_ADDRCONFIG;
+#endif /* AI_PARALLEL */
+
+	memset(hints, 0, sizeof(struct addrinfo));
+
+	if (info == _kCFHostIPv4Addresses) {
+		hints->ai_family = AF_INET;
+	} else if (info == _kCFHostIPv6Addresses) {
+		hints->ai_family = AF_INET6;
+	} else {
+		hints->ai_family = AF_UNSPEC;
+	}
+
+	hints->ai_socktype   = SOCK_STREAM;
+	hints->ai_flags      = ai_flags;
+}
+
 #if defined(__MACH__)
 /* static */ CFMachPortRef
 _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
@@ -710,20 +734,9 @@ _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef cont
         struct addrinfo hints;
 		mach_port_t prt = MACH_PORT_NULL;
 		CFMachPortContext ctxt = {0, (void*)context, CFRetain, CFRelease, CFCopyDescription};
-		
+
 		// Set up the hints for getaddrinfo
-        memset(&hints, 0, sizeof(hints));
-		
-#ifdef AI_PARALLEL
-        hints.ai_flags = AI_ADDRCONFIG | AI_PARALLEL;
-#else
-        hints.ai_flags = AI_ADDRCONFIG;
-#endif /* AI_PARALLEL */
-		
-		hints.ai_socktype = SOCK_STREAM;
-		
-		hints.ai_family = (info == _kCFHostIPv4Addresses) ? AF_INET :
-			(info == _kCFHostIPv6Addresses) ? AF_INET6 : AF_UNSPEC;
+		_InitGetAddrInfoHints(info, &hints);
 			
 		// Start the async lookup
 		error->error = getaddrinfo_async_start(&prt, (const char*)buffer, NULL, &hints, _GetAddrInfoCallBack, (void*)context);
