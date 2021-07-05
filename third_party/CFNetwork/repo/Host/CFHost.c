@@ -1195,7 +1195,7 @@ _GetAddrInfoCallBack(int32_t status, struct addrinfo* res, void* ctxt) {
 		_CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
 
 		// Go ahead and invalidate the lookup
-		CFMachPortInvalidate((CFMachPortRef)(host->_lookup));
+		_CFTypeInvalidate(host->_lookup);
 
 		// Release the lookup now.
 		CFRelease(host->_lookup);
