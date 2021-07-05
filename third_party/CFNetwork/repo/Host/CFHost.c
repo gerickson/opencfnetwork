@@ -551,9 +551,9 @@ _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176)
 			if (addr) host->_lookup = _CreateNameLookup(addr, host, &(host->_error));
 			break;
 
-#if defined(__MACH__)
 		// Create a reachability check using the address or name (prefers address).
 		case kCFHostReachability:
+#if defined(__MACH__)
 			{
 				CFTypeRef use = (addr != NULL) ? (CFTypeRef)addr : (CFTypeRef)name;
 
@@ -635,8 +635,13 @@ _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176)
 					}
 				}
 			}
-			break;
+#else
+			{
+				host->_error.error = EOPNOTSUPP;
+				host->_error.domain = kCFStreamErrorDomainPOSIX;
+			}
 #endif /* #if defined(__MACH__) */
+			break;
 
 		case 0x0000FFFC /* _kCFHostMasterAddressLookup */:
 			host->_lookup = _CreateMasterAddressLookup(name, info, host, &(host->_error));
