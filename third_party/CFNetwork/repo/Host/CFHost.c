@@ -1764,8 +1764,9 @@ _AddressLookupSchedule_NoLock(_CFHost* host, CFRunLoopRef rl, CFStringRef mode) 
 
 	list = CFDictionaryGetValue(_HostLookups, name);
 
-	if (list)
+	if (list) {
 		CFHostScheduleWithRunLoop((CFHostRef)CFArrayGetValueAtIndex(list, 0), rl, mode);
+	}
 
 	_CFMutexUnlock(_HostLock);
 }
