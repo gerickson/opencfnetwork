@@ -61,6 +61,10 @@ _CFTypeScheduleOnRunLoop(CFTypeRef obj, CFRunLoopRef runLoop, CFStringRef runLoo
 	else if (t == CFSocketGetTypeID()) {
 		src = CFSocketCreateRunLoopSource(CFGetAllocator(obj), (CFSocketRef)obj, 0);
 	}
+
+	else if (t == CFFileDescriptorGetTypeID()) {
+		src = CFFileDescriptorCreateRunLoopSource(CFGetAllocator(obj), (CFFileDescriptorRef)obj, 0);
+	}
 	
 	else if (t == CFReadStreamGetTypeID()) {
 		fn = (void(*)(CFTypeRef, CFRunLoopRef, CFStringRef))CFReadStreamScheduleWithRunLoop;
@@ -141,6 +145,10 @@ _CFTypeUnscheduleFromRunLoop(CFTypeRef obj, CFRunLoopRef runLoop, CFStringRef ru
 	
 	else if (t == CFSocketGetTypeID()) {
 		src = CFSocketCreateRunLoopSource(CFGetAllocator(obj), (CFSocketRef)obj, 0);
+	}
+
+	else if (t == CFFileDescriptorGetTypeID()) {
+		src = CFFileDescriptorCreateRunLoopSource(CFGetAllocator(obj), (CFFileDescriptorRef)obj, 0);
 	}
 	
 	else if (t == CFReadStreamGetTypeID()) {
@@ -226,6 +234,10 @@ _CFTypeScheduleOnMultipleRunLoops(CFTypeRef obj, CFArrayRef schedules) {
 	
 	else if (t == CFSocketGetTypeID()) {
 		src = CFSocketCreateRunLoopSource(CFGetAllocator(obj), (CFSocketRef)obj, 0);
+	}
+
+	else if (t == CFFileDescriptorGetTypeID()) {
+		src = CFFileDescriptorCreateRunLoopSource(CFGetAllocator(obj), (CFFileDescriptorRef)obj, 0);
 	}
 	
 	else if (t == CFReadStreamGetTypeID()) {
@@ -315,6 +327,10 @@ _CFTypeUnscheduleFromMultipleRunLoops(CFTypeRef obj, CFArrayRef schedules) {
 	else if (t == CFSocketGetTypeID()) {
 		src = CFSocketCreateRunLoopSource(CFGetAllocator(obj), (CFSocketRef)obj, 0);
 	}
+
+	else if (t == CFFileDescriptorGetTypeID()) {
+		src = CFFileDescriptorCreateRunLoopSource(CFGetAllocator(obj), (CFFileDescriptorRef)obj, 0);
+	}
 	
 	else if (t == CFReadStreamGetTypeID()) {
 		fn = (void(*)(CFTypeRef, CFRunLoopRef, CFStringRef))CFReadStreamUnscheduleFromRunLoop;
@@ -403,6 +419,10 @@ _CFTypeInvalidate(CFTypeRef obj) {
 	
 	else if (t == CFSocketGetTypeID()) {
 		CFSocketInvalidate((CFSocketRef)obj);
+	}
+
+	else if (t == CFFileDescriptorGetTypeID()) {
+		CFFileDescriptorInvalidate((CFFileDescriptorRef)obj);
 	}
 	
 	/* For scheduled types of objects, it is invalidated by setting the client to NULL. */
