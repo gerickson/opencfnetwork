@@ -2706,9 +2706,32 @@ _CFDataCopyAddressByInjectingPort(CFDataRef address, CFNumberRef port) {
 	return address;
 }
 
-
+/**
+ *  @brief
+ *    Schedule and start a socket stream lookup operation.
+ *
+ *  @param[in]      lookup     The type of lookup to perform. Assumed
+ *                             to be either "Host" lookup (via
+ *                             #CFHostStartInfoResolution) or
+ *                             "NetService" lookup (via
+ *                             #CFNetServiceResolve).
+ *  @param[in]      schedules  The set of run loops to schedule the
+ *                             lookup on.
+ *  @param[in,out]  error      A pointer to a #CFStreamError structure,
+ *                             that if an error occurs, is set to the
+ *                             error and the error's domain.
+ *  @param[in]      cb         A pointer to the callback to invoke on
+ *                             lookup completion.
+ *  @param[in]      info       A pointer to caller-provided context to
+ *                             be returned on lookup completion.
+ *
+ *  @returns
+ *    TRUE if the lookup was started; otherwise, FALSE.
+ *
+ */
 /* static */ Boolean
 _ScheduleAndStartLookup(CFTypeRef lookup, CFArrayRef* schedules, CFStreamError* error, const void* cb, void* info) {
+	Boolean started = FALSE;
 
 	do {
 		int i;
@@ -2759,12 +2782,12 @@ _ScheduleAndStartLookup(CFTypeRef lookup, CFArrayRef* schedules, CFStreamError* 
 		
 		/* Start the lookup */
 		if (lookup_type == host_type)
-			CFHostStartInfoResolution((CFHostRef)lookup, kCFHostAddresses, error);
+			started = CFHostStartInfoResolution((CFHostRef)lookup, kCFHostAddresses, error);
 		else
-			CFNetServiceResolveWithTimeout((CFNetServiceRef)lookup, 0.0, error);
+			started = CFNetServiceResolveWithTimeout((CFNetServiceRef)lookup, 0.0, error);
 		
 		/* Verify that the lookup started. */
-		if (error->error) {
+		if (!started || error->error) {
 			
 			/* Remove it from the all schedules. */
 			for (i = 0; schedules[i]; i++)
@@ -2775,7 +2798,7 @@ _ScheduleAndStartLookup(CFTypeRef lookup, CFArrayRef* schedules, CFStreamError* 
 			
 			break;
 		}
-		
+
 		/* Did start a lookup. */
 		return TRUE;
 	}
