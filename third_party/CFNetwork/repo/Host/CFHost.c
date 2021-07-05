@@ -643,7 +643,7 @@ _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176)
 #endif /* #if defined(__MACH__) */
 			break;
 
-		case 0x0000FFFC /* _kCFHostMasterAddressLookup */:
+		case _kCFHostMasterAddressLookup:
 			host->_lookup = _CreateMasterAddressLookup(name, info, host, &(host->_error));
 			break;
 
