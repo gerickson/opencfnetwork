@@ -2000,7 +2000,42 @@ CFHostCreateCopy(CFAllocatorRef allocator, CFHostRef h) {
 	return (CFHostRef)result;
 }
 
-
+/**
+ *  @brief
+ *    Starts resolution for a host object.
+ *
+ *  This function retrieves the information specified by @a info and
+ *  stores it in the host.
+ *
+ * In synchronous mode, this function blocks until the resolution has
+ * completed, in which case this function returns TRUE, until the
+ * resolution is stopped by calling #CFHostCancelInfoResolution from
+ * another thread, in which case this function returns FALSE, or until
+ * an error occurs.
+ *
+ *  @param[in]      theHost  The host, obtained by previously calling
+ *                           #CFHostCreateCopy,
+ *                           #CFHostCreateWithAddress, or
+ *                           #CFHostCreateWithName, that is to be
+ *                           resolved. This value must not be NULL.
+ *  @param[in]      info     A value of type CFHostInfoType
+ *                           specifying the type of information that
+ *                           is to be retrieved. See #CFHostInfoType
+ *                           for possible values.
+ *  @param[in,out]  error    A pointer to a #CFStreamError structure,
+ *                           that if an error occurs, is set to the
+ *                           error and the error's domain. In
+ *                           synchronous mode, the error indicates why
+ *                           resolution failed, and in asynchronous
+ *                           mode, the error indicates why resolution
+ *                           failed to start.
+ *
+ *  @returns
+ *    TRUE if the resolution was started (asynchronous mode); FALSE if
+ *    another resolution is already in progress for @a theHost or if an
+ *    error occurred.
+ *
+ */
 /* extern */ Boolean
 CFHostStartInfoResolution(CFHostRef theHost, CFHostInfoType info, CFStreamError* error) {
 
