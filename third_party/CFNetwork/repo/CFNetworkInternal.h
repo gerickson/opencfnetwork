@@ -67,7 +67,8 @@ CF_EXPORT void CFLog(int p, CFStringRef str, ...);
 #define __CFBitClear(V, N)  ((V) &= ~(1UL << (N)))
 
 #ifdef __CONSTANT_CFSTRINGS__
-#define CONST_STRING_DECL(S, V) const CFStringRef S = (const CFStringRef)__builtin___CFStringMakeConstantString(V);
+#define CONST_STRING_DECL(S, V) const CFStringRef S = (const CFStringRef)__builtin___CFStringMakeConstantString("" V "");
+#define CONST_STRING_DECL_LOCAL(S, V) static const CFStringRef S = (const CFStringRef)__builtin___CFStringMakeConstantString("" V "");
 #else
 
 /* Hack: we take a copy of this from CFInternal.h. */
@@ -80,6 +81,7 @@ struct CF_CONST_STRING {
 
 extern int __CFConstantStringClassReference[];
 
+/* CoreFoundation also has a copy of the CONST_STRING_DECL macro (for use on platforms without constant string support in cc); please warn cfnetwork-core@group.apple.com of any necessary changes to this macro. -- REW, 1/28/2002 */
 #if defined(__WIN32__)
 #define ___WindowsConstantStringClassReference (uintptr_t)&__CFConstantStringClassReference
 #else
