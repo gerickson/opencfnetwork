@@ -27,7 +27,7 @@ include $(abs_top_nlbuild_autotools_dir)/automake/pre.am
 
 AM_CFLAGS			= -I${top_srcdir}/include
 
-if CFNETWORK_BUILD_TESTS
+if OPENCFNETWORK_BUILD_TESTS
 check_PROGRAMS			= CFHostExample
 endif
 
@@ -35,7 +35,7 @@ CFHostExample_LDADD	        = ${top_builddir}/third_party/CFNetwork/libCFNetwork
 
 CFHostExample_SOURCES       	= CFHostExample.c
 
-if CF_BUILD_TESTS
+if OPENCFNETWORK_BUILD_TESTS
 check:
 	${LIBTOOL} --mode execute ./CFHostExample
 
