@@ -802,6 +802,22 @@ _CFNetworkFindProxyForURLAsync(CFStringRef scheme, CFURLRef url, CFStringRef hos
     if (host) CFRelease(host);
     return result;
 }
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+/* extern */ CFMutableArrayRef
+_CFNetworkFindProxyForURLAsync(CFStringRef scheme, CFURLRef url, CFStringRef host, CFDictionaryRef proxies, _CFProxyStreamCallBack callback, void *clientInfo, CFReadStreamRef *proxyStream) {
+	(void)scheme;
+	(void)url;
+	(void)host;
+	(void)proxies;
+	(void)callback;
+	(void)clientInfo;
+	(void)proxyStream;
+
+	return NULL;
+}
+#else
+#error "Platform portability issue!"
 #endif /* defined(__MACH__) */
 
 static void
@@ -2262,4 +2278,15 @@ CFMutableArrayRef _CFNetworkCopyProxyFromProxyStream(CFReadStreamRef proxyStream
         return NULL;
     }
 }
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+/* extern */ CFMutableArrayRef
+_CFNetworkCopyProxyFromProxyStream(CFReadStreamRef proxyStream, Boolean *isComplete) {
+	(void)proxyStream;
+	(void)isComplete;
+
+	return NULL;
+}
+#else
+#error "Platform portability issue!"
 #endif /* defined(__MACH__) || defined(__WIN32__) */
