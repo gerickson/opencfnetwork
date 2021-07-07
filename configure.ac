@@ -399,6 +399,8 @@ third_party/Makefile
 third_party/CFNetwork/Makefile
 src/Makefile
 src/include/Makefile
+examples/Makefile
+examples/CFHost/Makefile
 ])
 
 #
