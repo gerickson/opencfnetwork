@@ -38,6 +38,13 @@
 
 #include <dns_sd.h>
 
+#if defined(__linux__)
+#warning "Linux portability issue!"
+#define DNSServiceRefDeallocate(service) do { (void)service; } while (0)
+#define DNSServiceRefSockFD(service)     ((int)(-1))
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 
 #if 0
 #pragma mark -
@@ -580,7 +587,14 @@ _SocketCallBack(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, con
 	CFRetain(browser);
 	
 	// Dispatch to process the result
+#if defined(__MACH__)
 	err = DNSServiceProcessResult(browser->_browse);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+	err = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 	
 	// If there was an error, need to infor the client.
 	if (err) {
@@ -780,11 +794,19 @@ CFNetServiceBrowserSearchForDomains(CFNetServiceBrowserRef b, Boolean registrati
 		browser->_domainSearch = TRUE;
 		
 		// Create the domain search at the service discovery level
+#if defined(__MACH__)
 		browser->_error.error = DNSServiceEnumerateDomains(&browser->_browse,
 														   registrationDomains ? kDNSServiceFlagsRegistrationDomains : kDNSServiceFlagsBrowseDomains,
 														   0, 
 														   _DomainEnumReply,
 														   browser);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+		browser->_error.error = ENOSYS;
+		browser->_error.domain = kCFStreamErrorDomainPOSIX;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 		
 		// Fail if it did.
 		if (browser->_error.error) {
@@ -943,6 +965,7 @@ CFNetServiceBrowserSearchForServices(CFNetServiceBrowserRef b, CFStringRef domai
 		browser->_domainSearch = FALSE;
 		
 		// Create the service search at the service discovery level
+#if defined(__MACH__)
 		browser->_error.error = DNSServiceBrowse(&browser->_browse,
 												 0,
 												 0,
@@ -950,6 +973,14 @@ CFNetServiceBrowserSearchForServices(CFNetServiceBrowserRef b, CFStringRef domai
 												 properties[1],
 												 _BrowseReply,
 												 browser);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+		browser->_error.error = ENOSYS;
+		browser->_error.domain = kCFStreamErrorDomainPOSIX;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
+
 		
 		// Fail if it did.
 		if (browser->_error.error) {

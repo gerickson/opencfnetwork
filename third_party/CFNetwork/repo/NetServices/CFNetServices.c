@@ -52,6 +52,14 @@
 #define howmany(x, y)	(((x)+((y)-1))/(y))
 #endif /* !defined(howmany) */
 
+#if defined(__linux__)
+#warning "Linux portability issue!"
+#define DNSServiceRefDeallocate(service) do { (void)service; } while (0)
+#define DNSServiceRefSockFD(service)     ((int)(-1))
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
+
 #if 0
 #pragma mark -
 #pragma mark Constants
@@ -308,7 +316,13 @@ _ServiceDestroy(__CFNetService* service) {
 		if (service->_new_service) {
 
 			/* Release the underlying service discovery reference */
+#if defined(__MACH__)
 			DNSServiceRefDeallocate(service->_new_service);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 		}
 	}
 	
@@ -386,6 +400,7 @@ _ServiceEqual(__CFNetService* s1, __CFNetService* s2) {
 #if defined(__MACH__)
 				CFStringRef computer_name = SCDynamicStoreCopyLocalHostName(NULL);
 #else
+#warning "Linux portability issue!"
 				CFStringRef computer_name = CFSTR("localhost"); // XXX
 #endif
 				if (computer_name) {
@@ -436,6 +451,7 @@ _ServiceHash(__CFNetService* service) {
 #if defined(__MACH__)
 		name = SCDynamicStoreCopyLocalHostName(NULL);
 #else
+#warning "Linux portability issue!"
 		name = CFSTR("localhost"); // XXX
 #endif
 		
@@ -505,13 +521,20 @@ _ServiceSetInfo(__CFNetService* service, UInt32 property, CFTypeRef value, Boole
 			
 			/* Just update the primary txt record when given TXT property. */
 			if (property == _kCFNetServiceTXT) {
-				
+
+#if defined(__MACH__)
 				err = DNSServiceUpdateRecord(service->_new_service,
 											 NULL,
 											 0,
 											 value ? CFDataGetLength(value) : 0,
 											 value ? CFDataGetBytePtr(value) : NULL,
 											 0);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+				err = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 				
 				if (err)
 					result = FALSE;
@@ -525,23 +548,39 @@ _ServiceSetInfo(__CFNetService* service, UInt32 property, CFTypeRef value, Boole
 				
 				/* No value indicates to remove the record. */
 				if (!value) {
-					if (record)
+					if (record) {
+#if defined(__MACH__)
 						err = DNSServiceRemoveRecord(service->_new_service, record, 0);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+						err = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
+					}
 					CFDictionaryRemoveValue(service->_records, (const void*)property);
 				}
 				
 				/* If it exists, only need to update. */
 				else if (record) {
+#if defined(__MACH__)
 					err = DNSServiceUpdateRecord(service->_new_service,
 												 record,
 												 0,
 												 CFDataGetLength(value),
 												 CFDataGetBytePtr(value),
 												 0);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+				err = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 				}
 				
 				/* Not an update, but an add. */
 				else {
+#if defined(__MACH__)
 					err = DNSServiceAddRecord(service->_new_service,
 											  &record,
 											  0,
@@ -549,6 +588,12 @@ _ServiceSetInfo(__CFNetService* service, UInt32 property, CFTypeRef value, Boole
 											  CFDataGetLength(value),
 											  CFDataGetBytePtr(value),
 											  0);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+					err = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 					
 					CFDictionaryAddValue(service->_records, (const void*)property, record);
 				}
@@ -556,8 +601,16 @@ _ServiceSetInfo(__CFNetService* service, UInt32 property, CFTypeRef value, Boole
 				/* If there was an error, remove the published record. */
 				if (err) {
 					
-					if (record)
+					if (record) {
+#if defined(__MACH__)
 						DNSServiceRemoveRecord(service->_new_service, record, 0);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+						err = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
+					}
 					
 					CFDictionaryRemoveValue(service->_records, (const void*)property);
 					
@@ -713,7 +766,8 @@ _ServiceCreateQuery_NoLock(__CFNetService* service, ns_type rrtype, const char* 
 		
 		/* If got something for lookup, start the query */
 		if (which) {
-			
+
+#if defined(__MACH__)			
 			service->_error.error = DNSServiceQueryRecord(which,
 														  0,
 														  service->_interface,
@@ -722,6 +776,14 @@ _ServiceCreateQuery_NoLock(__CFNetService* service, ns_type rrtype, const char* 
 														  ns_c_in,
 														  reply,
 														  service);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+			service->_error.error = ENOSYS;
+			service->_error.domain = kCFStreamErrorDomainPOSIX;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
+
 		}
 	}
 	
@@ -838,7 +900,14 @@ _SocketCallBack(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, con
 	CFRetain(service);
 	
 	// Dispatch to process the result
+#if defined(__MACH__)
 	err = DNSServiceProcessResult(service->_new_service);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+	err = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 	
 	// If there was an error, need to infor the client.
 	if (err) {
@@ -906,7 +975,14 @@ _AQuerySocketCallBack(CFSocketRef s, CFSocketCallBackType type, CFDataRef addres
 	CFRetain(service);
 	
 	// Dispatch to process the result
+#if defined(__MACH__)
 	err = DNSServiceProcessResult(service->_a);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+	err = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 	
 	// If there was an error, need to inform the client.
 	if (err)
@@ -930,7 +1006,14 @@ _AAAAQuerySocketCallBack(CFSocketRef s, CFSocketCallBackType type, CFDataRef add
 	CFRetain(service);
 	
 	// Dispatch to process the result
+#if defined(__MACH__)
 	err = DNSServiceProcessResult(service->_aaaa);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+	err = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 	
 	// If there was an error, need to inform the client.
 	if (err)
@@ -1629,6 +1712,7 @@ _AddRecords(const void *key, const void *value, void *context) {
 	{
 		DNSRecordRef record;
 		
+#if defined(__MACH__)
 		((__CFNetService*)context)->_error.error = DNSServiceAddRecord(((__CFNetService*)context)->_new_service,
 																	   &record,
 																	   0,
@@ -1636,6 +1720,12 @@ _AddRecords(const void *key, const void *value, void *context) {
 																	   CFDataGetLength((CFDataRef)value),
 																	   CFDataGetBytePtr((CFDataRef)value),
 																	   0);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+		((__CFNetService*)context)->_error.error = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 		
 		if (!((__CFNetService*)context)->_error.error)
 			CFDictionaryAddValue(((__CFNetService*)context)->_records, key, record);
@@ -2217,6 +2307,7 @@ CFNetServiceRegisterWithOptions(CFNetServiceRef theService, CFOptionFlags option
 		}
 		
 		/* Create the registration */
+#if defined(__MACH__)
 		service->_error.error = DNSServiceRegister(&(service->_new_service),
 												   flags,
 												   0,
@@ -2229,6 +2320,13 @@ CFNetServiceRegisterWithOptions(CFNetServiceRef theService, CFOptionFlags option
 												   txt ? CFDataGetBytePtr(txt) : NULL,
 												   _RegisterReply,
 												   service);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+		service->_error.error = ENOSYS;
+		service->_error.domain = kCFStreamErrorDomainPOSIX;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 		
 		if (service->_error.error) {
 			service->_error.error = _DNSServiceErrorToCFNetServiceError(service->_error.error);
@@ -2403,9 +2501,11 @@ CFNetServiceResolveWithTimeout(CFNetServiceRef theService, CFTimeInterval timeou
 #if defined(__MACH__)		
 		_ServiceCreateQuery_NoLock(service, ns_t_invalid, properties[0],
 								   properties[1],  properties[2], FALSE);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
 #else
-#warning "Linux portability issue"
-#endif
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 		
 		/* If a timeout is set, need to start the timer. */
 		if (!service->_error.error && (timeout > 0.0)) {
@@ -2803,7 +2903,15 @@ CFNetServiceCreateDictionaryWithTXTData(CFAllocatorRef alloc, CFDataRef txtRecor
 		};
 		
 		/* Get the number of keys */
+#if defined(__MACH__)
 		uint16_t i, count = TXTRecordGetCount(len, txt);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+		uint16_t i, count = 0;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
+
 		result = CFDictionaryCreateMutable(alloc, 0, &kTXTDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 		
 		if (result) {
@@ -2868,7 +2976,14 @@ CFNetServiceCreateTXTDataWithDictionary(CFAllocatorRef alloc, CFDictionaryRef ke
 		CFDictionaryGetKeysAndValues(keyValuePairs, (const void**)keys, (const void**)values);
 		
 		/* Create the txt record */
+#if defined(__MACH__)
 		TXTRecordCreate(&txt, 0, NULL);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+		memset(&txt, 0, sizeof (TXTRecordRef));
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 		
 		/* Iterate over the key/value pairs. */
 		for (i = 0; i < count; i++) {
@@ -2905,7 +3020,15 @@ CFNetServiceCreateTXTDataWithDictionary(CFAllocatorRef alloc, CFDictionaryRef ke
 					break;
 					
 				/* Set the raw bytes */
+#if defined(__MACH__)
 				set = TXTRecordSetValue(&txt, (const char*)key, used, value);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+				set = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
+
 			}
 			
 			/* If it's data, it needs to be in the range of 0 and 255, inclusive. */
@@ -2914,17 +3037,31 @@ CFNetServiceCreateTXTDataWithDictionary(CFAllocatorRef alloc, CFDictionaryRef ke
 					 (CFDataGetLength((CFDataRef)(values[i])) >= 0))
 			{
 				/* Set the raw bytes from the data */
+#if defined(__MACH__)
 				set = TXTRecordSetValue(&txt,
 										(const char*)key,
 										CFDataGetLength((CFDataRef)(values[i])),
 										CFDataGetBytePtr((CFDataRef)(values[i])));
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+				set = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 			}
 			
 			/* Allow null for a key with no value */
 			else if (values[i] == kCFNull) {
 				
 				/* Sets the key to no value */
+#if defined(__MACH__)
 				set = TXTRecordSetValue(&txt, (const char*)key, 0, NULL);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+				set = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 			}
 			
 			/* Bad type */
@@ -2937,10 +3074,25 @@ CFNetServiceCreateTXTDataWithDictionary(CFAllocatorRef alloc, CFDictionaryRef ke
 		}
 		
 		/* If all the keys and values were processed, create the data for the txt record. */
-		if (i == count)
+		if (i == count) {
+#if defined(__MACH__)
 			result = CFDataCreate(alloc, TXTRecordGetBytesPtr(&txt), TXTRecordGetLength(&txt));
-		
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+			result = NULL;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
+
+		}
+
+#if defined(__MACH__)		
 		TXTRecordDeallocate(&txt);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 	}
 	
 	if (keys)

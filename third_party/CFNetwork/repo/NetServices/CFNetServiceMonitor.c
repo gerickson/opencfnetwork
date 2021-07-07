@@ -41,6 +41,14 @@
 #include <nameser.h>
 #endif
 
+#if defined(__linux__)
+#warning "Linux portability issue!"
+#define DNSServiceRefDeallocate(service) do { (void)service; } while (0)
+#define DNSServiceRefSockFD(service)     ((int)(-1))
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
+
 #if 0
 #pragma mark -
 #pragma mark Extern Function Declarations
@@ -370,7 +378,14 @@ _SocketCallBack(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, con
 	CFRetain(monitor);
 	
 	// Dispatch to process the result
+#if defined(__MACH__)
 	err = DNSServiceProcessResult(monitor->_monitor);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+	err = kDNSServiceErr_Unsupported;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 	
 	// If there was an error, need to infor the client.
 	if (err)
@@ -587,12 +602,19 @@ CFNetServiceMonitorStart(CFNetServiceMonitorRef theMonitor, CFNetServiceMonitorT
 							 &used);
 			properties[i][used] = '\0';
 		}
-		
+
+#if defined(__MACH__)		
 		DNSServiceConstructFullName(properties[3], properties[2], properties[1], properties[0]);
-		
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
+
 		monitor->_type = recordType;
 		
 		// Create the domain monitor at the service discovery level
+#if defined(__MACH__)
 		monitor->_error.error = DNSServiceQueryRecord(&monitor->_monitor,
 													  kDNSServiceFlagsLongLivedQuery,
 													  0,
@@ -601,6 +623,13 @@ CFNetServiceMonitorStart(CFNetServiceMonitorRef theMonitor, CFNetServiceMonitorT
 													  rrclass,
 													  _QueryRecordReply,
 													  monitor);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+		monitor->_error.error = ENOSYS;
+		monitor->_error.domain = kCFStreamErrorDomainPOSIX;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 		
 		// Fail if it did.
 		if (monitor->_error.error) {
