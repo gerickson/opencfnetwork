@@ -99,7 +99,7 @@ extern void _CFHTTPStreamCleanup(void);
 
 typedef struct _CFSSPIState *_CFSSPIStateRef;
 
-extern Boolean _CFMD5(const UInt8* d, UInt32 n, UInt8* md, UInt32 md_length);
+//extern Boolean _CFMD5(const UInt8* d, UInt32 n, UInt8* md, UInt32 md_length);
 extern Boolean _CFSSPIPackageIsEnabled(const char *packageName);
 
 extern _CFSSPIStateRef _CFCreateSSPIState(CFAllocatorRef alloc, CFStringRef method);

@@ -29,6 +29,10 @@
  *
  */
 
+#if HAVE_CONFIG_H
+#include "opencfnetwork-config.h"
+#endif
+
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreFoundation/CFRuntime.h>
 #include <CoreFoundation/CFPriv.h>
@@ -55,6 +59,16 @@
 
 #include "NTLM/NtlmGenerator.h"
 #endif // __MACH__
+
+#if HAVE_OPENSSL_BIO_H
+#include <openssl/bio.h>
+#endif
+#if HAVE_OPENSSL_EVP_H
+#include <openssl/evp.h>
+#endif
+#if HAVE_OPENSSL_MD5_H
+#include <openssl/md5.h>
+#endif
 
 #if defined(__WIN32__)
 // allows code using inet_addr() to port easily to Win32
@@ -377,11 +391,8 @@ static CFStringRef _CFHTTPAuthenticationCreateNTLMHeaderForRequest(CFHTTPAuthent
 static _AuthConnectionSpecific* _AuthConnectionSpecificRetain(CFAllocatorRef allocator, _AuthConnectionSpecific* specific);
 static void _AuthConnectionSpecificRelease(CFAllocatorRef allocator, _AuthConnectionSpecific* specific);
 
-#if defined(__MACH__)
 static Boolean _CFMD5(const UInt8* d, UInt32 n, UInt8* md, UInt32 md_length);
 //static Boolean _CFCanTryKerberos(void);
-#endif // __MACH__
-
 
 #if 0
 #pragma mark -
@@ -1100,7 +1111,14 @@ CFStringRef _CFEncodeBase64(CFAllocatorRef allocator, CFDataRef inputData) {
 	
 	unsigned outDataLen;	
 	CFStringRef result = NULL;
+#if defined(__MACH__)
 	unsigned char *outData = cuEnc64(CFDataGetBytePtr(inputData), CFDataGetLength(inputData), &outDataLen);
+#elif HAVE_BIO_F_BASE64
+	outDataLen = 0;
+	unsigned char *outData = NULL;
+#else
+#error "Platform portability issue!"
+#endif
 	
 	if(outData) {
 		
@@ -1131,8 +1149,15 @@ CFDataRef _CFDecodeBase64(CFAllocatorRef allocator, CFStringRef str) {
 
 	if (buffer) {
 		unsigned decoded;
+#if defined(__MACH__)
 		unsigned char* decode = cuDec64(buffer, length, &decoded);
-		
+#elif HAVE_BIO_F_BASE64
+		decoded = 0;
+		unsigned char * decode = NULL;
+#else
+#error "Platform portability issue!"
+#endif
+
 		if (buffer != stack_buffer)
 			CFAllocatorDeallocate(allocator, buffer);
 		
@@ -1332,20 +1357,28 @@ CFStringRef _CFStringUnquote(CFStringRef quoted) {
     return result;
 }
 
-
-#if defined(__MACH__)
 /* static */
 Boolean _CFMD5(const UInt8* d, UInt32 n, UInt8* md, UInt32 md_length) {
-
+#if defined(__MACH__)
 	CC_MD5_CTX ctx;
 	CC_MD5_Init(&ctx);
 	CC_MD5_Update(&ctx, d, n);
 	CC_MD5_Final(md, &ctx);
 
 	return TRUE;
-}
-#endif
+#elif HAVE_MD5_INIT
+	MD5_CTX ctx;
+	MD5_Init(&ctx);
+	MD5_Update(&ctx, d, n);
+	MD5_Final(md, &ctx);
 
+	return TRUE;
+#else
+#warning "Platform portability issue!"
+
+	return FALSE;
+#endif
+}
 
 /* static */
 CFStringRef _CFStringCreateMD5HashWithString(CFAllocatorRef alloc, CFStringRef string) {
@@ -1725,12 +1758,26 @@ _CFHTTPAuthenticationCreateNegotiateHeaderForRequest(CFHTTPAuthenticationRef aut
 			if (!strncmp("http", (const char*)servicetype, 4)) {
 
 				// first force try the uppercase
+#if defined(__MACH__)
 				spnegoError = spnegoTokenInitFromPrincipal((const char*)hostname, "HTTP", &blob, (unsigned*)&len);
 				if( spnegoError ) {
 					spnegoError = spnegoTokenInitFromPrincipal((const char*)hostname, "http", &blob, (unsigned*)&len);
 				}
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+				spnegoError = -1;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 			} else {
+#if defined(__MACH__)
 				spnegoError = spnegoTokenInitFromPrincipal((const char*)hostname, (const char *)servicetype, &blob, (unsigned*)&len);
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+				spnegoError = -1;
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 			}
 			
 			if (hostname != buf1)
