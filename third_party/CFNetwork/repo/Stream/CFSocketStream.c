@@ -1550,7 +1550,6 @@ _SocketStreamSetProperty(CFTypeRef stream, CFStringRef propertyName, CFTypeRef p
 				CFDictionaryRemoveValue(ctxt->_properties, _kCFStreamPropertySocketSecurityAuthenticatesServerCertificate);
 		}
     }
-#endif /* defined(__MACH__) */
 	
     else if (CFEqual(propertyName, kCFStreamPropertySocketSecurityLevel)) {
 		
@@ -1572,6 +1571,7 @@ _SocketStreamSetProperty(CFTypeRef stream, CFStringRef propertyName, CFTypeRef p
 			}
 		}
     }
+#endif /* defined(__MACH__) */
 	
 	else if (CFEqual(propertyName, _kCFStreamPropertySocketPeerName)) {
 		
