@@ -31,6 +31,7 @@ SUBDIRS                                          = \
     src/include                                    \
     third_party                                    \
     src                                            \
+    examples                                       \
     $(NULL)
 
 EXTRA_DIST                                       = \
