@@ -238,7 +238,10 @@ static CFMachPortRef _CreateNameLookup(CFDataRef address, void* context, CFStrea
 static SCNetworkReachabilityRef _CreateReachabilityLookup(CFTypeRef thing, void* context, CFStreamError* error);
 static CFMachPortRef _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamError* error);
 #endif /* #if defined(__MACH__) */
-
+#if defined(__linux__)
+static CFFileDescriptorRef _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamError* error);
+static CFFileDescriptorRef _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error);
+#endif /* defined(__linux__) */
 static void _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt);
 #if defined(__MACH__)
 static void _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
@@ -252,8 +255,8 @@ static void _NetworkReachabilityCallBack(SCNetworkReachabilityRef target, SCNetw
 static void _NetworkReachabilityByIPCallBack(_CFHost* host);
 #endif /* defined(__MACH__) */
 
-static void _DNSCallBack(int32_t status, char *buf, uint32_t len, struct sockaddr *from, int fromlen, void *context);
 #if defined(__MACH__)
+static void _DNSCallBack(int32_t status, char *buf, uint32_t len, struct sockaddr *from, int fromlen, void *context);
 static void _DNSMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 #endif
 static void _MasterCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamError *error, CFStringRef name);
@@ -1040,6 +1043,7 @@ _CreateAddressLookupRequest(const char *name, CFHostInfoType info, int signal, C
 	sigev.sigev_signo           = signal;
 
 	result = getaddrinfo_a(GAI_NOWAIT, gai_request->_request_list, 1, &sigev);
+
 	if (result != 0) {
 		_HandleGetAddrInfoStatus(result, error, TRUE);
 
@@ -1370,6 +1374,26 @@ _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
 }
 #endif /* #if defined(__MACH__) */
 
+#if defined(__linux__)
+
+/* static */ CFFileDescriptorRef
+_CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
+	CFFileDescriptorRef     result = NULL;
+
+	__CFHostTraceEnterWithFormat("address %p context %p error %p\n",
+							address, context, error);
+
+	if (error) {
+		error->error = EOPNOTSUPP;
+		error->domain = kCFStreamErrorDomainPOSIX;
+	}
+
+	__CFHostTraceExitWithFormat("result %p\n", result);
+
+	return result;
+}
+#endif /* defined(__linux__) */
+
 #if defined(__MACH__)
 /* static */ SCNetworkReachabilityRef
 _CreateReachabilityLookup(CFTypeRef thing, void* context, CFStreamError* error) {
@@ -1462,6 +1486,51 @@ _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamEr
 	return result;
 }
 #endif /* defined(__MACH__) */
+
+#if defined(__linux__)
+/* static */ CFFileDescriptorRef
+_CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamError* error) {
+	const CFAllocatorRef    allocator = CFGetAllocator(thing);
+	UInt8*                  buffer;
+	const int               signal = __kCFHostLinuxSignalFdSignal;
+	CFFileDescriptorRef     result = NULL;
+	int                     status;
+
+	__CFHostTraceEnterWithFormat("thing %p type %x context %p error %p\n",
+								 thing, type, context, error);
+
+	CFShow(thing);
+
+	// Create a CFString representation of the lookup by converting it
+	// into a null-terminated C string buffer consumable by
+	// getaddrinfo_a.
+
+	buffer = _CreateLookup_Common(thing, error);
+	__Require(buffer != NULL, done);
+
+	// Create the CFFileDescriptor-based lookup source that will
+	// handle the I/O for the asynchronous getaddrinfo_a call.
+
+	result = _CreateAddressLookupSource(signal, context, error);
+	__Require_Action(result != NULL, done, CFAllocatorDeallocate(allocator, buffer));
+
+	status = _CreateAddressLookupRequest((const char *)buffer, type, signal, error);
+	if (status != 0) {
+		_HandleGetAddrInfoStatus(status, error, TRUE);
+
+		CFAllocatorDeallocate(allocator, buffer);
+		CFFileDescriptorInvalidate(result);
+		CFRelease(result);
+
+		result = NULL;
+	}
+
+ done:
+	__CFHostTraceExitWithFormat("result %p\n", result);
+
+	return result;
+}
+#endif /* defined(__linux__) */
 
 /* static */ void
 _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt) {
