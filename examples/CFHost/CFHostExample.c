@@ -33,6 +33,9 @@
 
 #include <arpa/inet.h>
 
+#include <sys/param.h>
+#include <sys/socket.h>
+
 #include <AssertMacros.h>
 
 #include <CFNetwork/CFNetwork.h>
@@ -65,21 +68,77 @@
     __CFHostExampleTraceExitWithFormat("\n")
 
 static void
-GetAddresses(CFHostRef aHost, Boolean aAsync)
+LogResolutionStatus(Boolean aResolved, const char *aWhat)
+{
+	__CFHostExampleLog("    %sesolved %s:\n", aResolved ? "R" : "Unr", aWhat);
+}
+
+static void
+LogResult(CFIndex aIndex, const char *aResult)
+{
+    __CFHostExampleLog("        %lu: %s\n",
+                       aIndex,
+                       (aResult != NULL) ? aResult : "<???>");
+}
+
+static void
+GetAndLogAddresses(CFHostRef aHost, Boolean aAsync)
 {
     Boolean    resolved;
     CFArrayRef addresses = NULL;
-    CFIndex    count;
 
     addresses = CFHostGetAddressing(aHost, &resolved);
 
 
     if (addresses != NULL) {
-        count = CFArrayGetCount(addresses);
+        const CFIndex count = CFArrayGetCount(addresses);
+        CFIndex       i;
 
         if (count > 0) {
-            __CFHostExampleLog("%sesolved addresses:\n", resolved ? "R" : "Unr");
-            CFShow(addresses);
+            LogResolutionStatus(resolved, "addresses");
+
+            for (i = 0; i < count; i++) {
+                CFDataRef data = CFArrayGetValueAtIndex(addresses, i);
+
+                if (data != NULL) {
+                    const UInt8 * p   = CFDataGetBytePtr(data);
+                    const CFIndex len = CFDataGetLength(data);
+                    void *        addr;
+                    socklen_t     addrlen;
+
+                    if ((p != NULL) && (len > 0)) {
+                        const int    family = ((struct sockaddr *)(p))->sa_family;
+                        const size_t buflen = INET6_ADDRSTRLEN;
+                        char         buffer[INET6_ADDRSTRLEN];
+                        const char * result;
+
+                        switch (family) {
+
+                        case AF_INET:
+                            addr = &(((struct sockaddr_in *)(p))->sin_addr);
+                            addrlen = sizeof(struct in_addr);
+                            break;
+
+                        case AF_INET6:
+                            addr = &(((struct sockaddr_in6 *)(p))->sin6_addr);
+                            addrlen = sizeof(struct in6_addr);
+                            break;
+
+                        default:
+                            addr = NULL;
+                            addrlen = 0;
+                            break;
+
+                        }
+
+                        if ((addr != NULL) && (addrlen > 0)) {
+                            result = inet_ntop(family, addr, buffer, buflen);
+
+                            LogResult(i, result);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -89,20 +148,28 @@ GetAddresses(CFHostRef aHost, Boolean aAsync)
 }
 
 static void
-GetNames(CFHostRef aHost, Boolean aAsync)
+GetAndLogNames(CFHostRef aHost, Boolean aAsync)
 {
     Boolean    resolved;
     CFArrayRef names = NULL;
-    CFIndex    count;
 
     names = CFHostGetNames(aHost, &resolved);
 
     if (names != NULL) {
-        count = CFArrayGetCount(names);
+		const CFIndex count = CFArrayGetCount(names);
+		CFIndex       i;
 
         if (count > 0) {
-            __CFHostExampleLog("%sesolved names:\n", resolved ? "R" : "Unr");
-            CFShow(names);
+			LogResolutionStatus(resolved, "names");
+
+			for (i = 0; i < count; i++) {
+				const CFIndex buflen = MAXHOSTNAMELEN;
+				char          buffer[MAXHOSTNAMELEN];
+				CFStringRef   string    = CFArrayGetValueAtIndex(names, i);
+				Boolean       converted = CFStringGetCString(string, buffer, buflen, kCFStringEncodingASCII);
+
+                LogResult(i, converted ? buffer : NULL);
+			}
         }
     }
 
@@ -112,10 +179,10 @@ GetNames(CFHostRef aHost, Boolean aAsync)
 }
 
 static void
-GetAddressesAndNames(CFHostRef aHost, Boolean aAsync)
+GetAndLogAddressesAndNames(CFHostRef aHost, Boolean aAsync)
 {
-    GetAddresses(aHost, aAsync);
-    GetNames(aHost, aAsync);
+    GetAndLogAddresses(aHost, aAsync);
+    GetAndLogNames(aHost, aAsync);
 }
 
 static void
@@ -124,10 +191,10 @@ HostCallBack(CFHostRef aHost, CFHostInfoType aInfo, const CFStreamError *aError,
     Boolean *   async = ((Boolean *)(aContext));
 
     if (aInfo == kCFHostAddresses) {
-        GetAddresses(aHost, *async);
+        GetAndLogAddresses(aHost, *async);
 
     } else if (aInfo == kCFHostNames) {
-        GetNames(aHost, *async);
+        GetAndLogNames(aHost, *async);
 
     }
 
@@ -163,12 +230,17 @@ static int
 DemonstrateHostByName(Boolean *aAsync)
 {
     CFStringRef         name = CFSTR("localhost");
+    const CFIndex       buflen = MAXHOSTNAMELEN;
+    char                buffer[MAXHOSTNAMELEN];
+    Boolean             converted = CFStringGetCString(name, buffer, buflen, kCFStringEncodingASCII);
     CFHostRef           host = NULL;
     CFTypeID            type;
     CFHostClientContext context = { 0, aAsync, NULL, NULL, NULL };
     Boolean             set;
     Boolean             started;
     int                 status = -1;
+
+    __CFHostExampleLog("By name '%s' (DNS)...\n", converted ? buffer : NULL);
 
     host = CFHostCreateWithName(kCFAllocatorDefault, name);
     __Require_Action(host != NULL, exit, status = -1);
@@ -179,7 +251,7 @@ DemonstrateHostByName(Boolean *aAsync)
     set = CFHostSetClient(host, HostCallBack, &context);
     __Require_Action(set, exit, status = -1);
 
-    GetAddressesAndNames(host, FALSE);
+    GetAndLogAddressesAndNames(host, FALSE);
 
     started = StartResolution(host, kCFHostAddresses, *aAsync);
     __Require_Action(started, done, status = -1);
@@ -209,6 +281,10 @@ DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, si
     Boolean             started;
     int                 status = -1;
 
+    __CFHostExampleLog("By IPv%c address '%s' (Reverse DNS)...\n",
+                       ((address->sa_family == AF_INET) ? '4' : '6'),
+                       addressString);
+
     status = inet_pton(address->sa_family, addressString, address);
     __Require_Action(status == 1, exit, status = -1);
 
@@ -228,7 +304,7 @@ DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, si
     set = CFHostSetClient(host, HostCallBack, &context);
     __Require_Action(set, exit, status = -1);
 
-    GetAddressesAndNames(host, FALSE);
+    GetAndLogAddressesAndNames(host, FALSE);
 
     started = StartResolution(host, kCFHostNames, *aAsync);
     __Require_Action(started, done, status = -1);
@@ -290,17 +366,11 @@ DemonstrateHost(Boolean *aAsync)
 {
     int result;
 
-    __CFHostExampleLog("By name (DNS)...\n");
-
     result = DemonstrateHostByName(aAsync);
     __Require(result == 0, done);
 
-    __CFHostExampleLog("By IPv4 address (Reverse DNS)...\n");
-
     result = DemonstrateHostByAddressIPv4(aAsync);
     __Require(result == 0, done);
-
-    __CFHostExampleLog("By IPv6 address (Reverse DNS)...\n");
 
     result = DemonstrateHostByAddressIPv6(aAsync);
     __Require(result == 0, done);
