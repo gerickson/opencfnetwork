@@ -1019,7 +1019,7 @@ _CreateAddressLookupRequest(const char *name, CFHostInfoType info, int signal, C
 
 	memset(&sigev, 0, sizeof(sigev));
   
-	gai_request = (_CFGAIARequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(gai_request), 0);
+	gai_request = (_CFGAIARequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFGAIARequest), 0);
 	__Require_Action(gai_request != NULL,
 					 done,
 					 result        = -ENOMEM;
