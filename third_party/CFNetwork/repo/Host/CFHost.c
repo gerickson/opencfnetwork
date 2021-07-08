@@ -122,15 +122,15 @@
 #define __CFHostMaybeTrace(dir, name)                           \
 	__CFHostMaybeLog(dir " %s\n", name)
 #define __CFHostMaybeTraceWithFormat(dir, name, format, ...)	\
-	__CFHostMaybeLog(dir " %s " format, name, ##__VA_ARGS__)
+	__CFHostMaybeLog(dir " %s" format, name, ##__VA_ARGS__)
 #define __CFHostTraceEnterWithFormat(format, ...)               \
-	__CFHostMaybeTraceWithFormat("-->", __func__, format, ##__VA_ARGS__)
+	__CFHostMaybeTraceWithFormat("-->", __func__, " " format, ##__VA_ARGS__)
 #define __CFHostTraceExitWithFormat(format, ...)                \
-	__CFHostMaybeTraceWithFormat("<--", __func__, format, ##__VA_ARGS__)
+	__CFHostMaybeTraceWithFormat("<--", __func__, " " format, ##__VA_ARGS__)
 #define __CFHostTraceEnter()                                    \
-	__CFHostTraceEnterWithFormat("")
+	__CFHostTraceEnterWithFormat("\n")
 #define __CFHostTraceExit()                                     \
-	__CFHostTraceExitWithFormat("")
+	__CFHostTraceExitWithFormat("\n")
 
 /* extern */ const SInt32 kCFStreamErrorDomainNetDB = 12;
 /* extern */ const SInt32 kCFStreamErrorDomainSystemConfiguration = 13;
