@@ -380,6 +380,8 @@ _HostCreate(CFAllocatorRef allocator) {
 		// Put back the base
 		memmove(&(result->_base), &copy, sizeof(result->_base));
 
+        CF_SPINLOCK_INIT_FOR_STRUCTS(result->_lock);
+
 		// No lookup by default
 		result->_type = _kCFNullHostInfoType;
 
