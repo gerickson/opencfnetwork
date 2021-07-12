@@ -1270,7 +1270,7 @@ _AresStatusMapToStreamError(int status, CFStreamError *error) {
 
     case ARES_SUCCESS:
         error->error = 0;
-        error->domain = kCFStreamErrorDomainPOSIX;
+        error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
         break;
 
     case ARES_ENODATA:
