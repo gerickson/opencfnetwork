@@ -1731,6 +1731,11 @@ _AresQueryCompletedCallBack(void *arg,
                          __LINE__,
                          ares_request,
                          ares_request->_request_pending);
+    } else {
+        if (ares_request->_request_pending > 0)
+        {
+            ares_request->_request_pending--;
+        }
     }
 
     ares_request->_request_status = status;
