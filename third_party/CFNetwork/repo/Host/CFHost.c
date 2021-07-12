@@ -1675,6 +1675,7 @@ _AresQueryCompletedCallBack(void *arg,
                 ai = _AresHostentToAddrInfo(hostent, ares_request->_request_error);
                 if (ai != NULL) {
                     _AresAccumulateAddrInfo(ares_request, ai);
+                }
             }
 
             __CFHostMaybeLog("%d: ares_request (%p)->_request_pending %zu\n",
