@@ -270,8 +270,8 @@ static void _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, voi
 #if defined(__MACH__)
 static void _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 #endif
-static void _GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt);
 #if defined(__MACH__)
+static void _GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt);
 static void _GetNameInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 #endif
 #if defined(__MACH__)
