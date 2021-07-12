@@ -1671,9 +1671,10 @@ _AresQueryCompletedCallBack(void *arg,
                 }
             }
 
-            ai = _AresHostentToAddrInfo(hostent, ares_request->_request_error);
-            if (ai != NULL) {
-                _AresAccumulateAddrInfo(ares_request, ai);
+            if (ares_request->_request_name != NULL) {
+                ai = _AresHostentToAddrInfo(hostent, ares_request->_request_error);
+                if (ai != NULL) {
+                    _AresAccumulateAddrInfo(ares_request, ai);
             }
 
             __CFHostMaybeLog("%d: ares_request (%p)->_request_pending %zu\n",
@@ -1705,12 +1706,14 @@ _AresQueryCompletedCallBack(void *arg,
             } else if (ares_request->_request_pending == 0) {
                 __CFHostMaybeLog("There are no more lookup requests pending, cleaning up...\n");
 
-                // Invoke the common, shared getaddrinfo{,_a} callback.
+                if (ares_request->_request_name != NULL) {
+                    // Invoke the common, shared getaddrinfo{,_a} callback.
 
-                _GetAddrInfoCallBackWithFree(_AresStatusMapToAddrInfoError(status),
-                                             ares_request->_request_addrinfo,
-                                             ares_request->_request_host,
-                                             _AresFreeAddrInfo);
+                    _GetAddrInfoCallBackWithFree(_AresStatusMapToAddrInfoError(status),
+                                                 ares_request->_request_addrinfo,
+                                                 ares_request->_request_host,
+                                                 _AresFreeAddrInfo);
+                }
 
                 if (ares_request->_request_lookup != NULL) {
                     CFFileDescriptorInvalidate(ares_request->_request_lookup);
