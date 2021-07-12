@@ -255,14 +255,15 @@ static CFFileDescriptorRef _CreatePrimaryAddressLookup_Linux_GetAddrInfo_A(CFStr
 #endif /* HAVE_GETADDRINFO_A && 0 */
 #endif /* defined(__linux__) */
 static CFTypeRef _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStreamError* error);
+static CFTypeRef _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error);
 #if defined(__MACH__)
-static CFMachPortRef _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error);
+static CFMachPortRef _CreateNameLookup_Mach(CFDataRef address, void* context, CFStreamError* error);
 static SCNetworkReachabilityRef _CreateReachabilityLookup(CFTypeRef thing, void* context, CFStreamError* error);
 static CFMachPortRef _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamError* error);
 #endif /* #if defined(__MACH__) */
 #if defined(__linux__)
 static CFFileDescriptorRef _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamError* error);
-static CFFileDescriptorRef _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error);
+static CFFileDescriptorRef _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* error);
 #endif /* defined(__linux__) */
 typedef void (*FreeAddrInfoCallBack)(struct addrinfo *res);
 static void _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *ctxt, FreeAddrInfoCallBack freeaddrinfo_cb);
@@ -2029,9 +2030,28 @@ _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStr
 	return result;
 }
 
+/* static */ CFTypeRef
+_CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
+	CFTypeRef result = NULL;
+
+#if defined(__MACH__)
+	result = _CreateNameLookup_Mach(address, context, error);
+#elif defined(__linux__)
+# if HAVE_ARES_INIT && 1
+    result = _CreateNameLookup_Linux_Ares(address, context, error);
+# else
+#  error "No Linux name (Reverse DNS) lookup implementation!"
+# endif /* HAVE_ARES_INIT && 1 */
+#else
+#warning "Platform portability issue!"
+#endif /* defined(__MACH__) */
+
+	return result;
+}
+
 #if defined(__MACH__)
 /* static */ CFMachPortRef
-_CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
+_CreateNameLookup_Mach(CFDataRef address, void* context, CFStreamError* error) {
 
 	mach_port_t prt = MACH_PORT_NULL;
 	CFMachPortRef result = NULL;
@@ -2055,9 +2075,9 @@ _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
 #endif /* #if defined(__MACH__) */
 
 #if defined(__linux__)
-
+#if HAVE_ARES_INIT && 1
 /* static */ CFFileDescriptorRef
-_CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
+_CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* error) {
 	CFFileDescriptorRef     result = NULL;
 
 	__CFHostTraceEnterWithFormat("address %p context %p error %p\n",
@@ -2072,6 +2092,7 @@ _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error) {
 
 	return result;
 }
+#endif /* HAVE_ARES_INIT && 1 */
 #endif /* defined(__linux__) */
 
 #if defined(__MACH__)
