@@ -1757,9 +1757,9 @@ _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CF
 
     memset(ares_request, 0, sizeof(_CFHostAresRequest));
 
-    ares_request->_request_name    = buffer;
+    ares_request->_request_name    = (const char *)buffer;
     ares_request->_request_error   = error;
-    ares_request->_request_host    = context;
+    ares_request->_request_host    = (_CFHost *)context;
 
     __CFHostMaybeLog("%d: ares_request (%p)->_request_name %s\n",
                      __LINE__,
