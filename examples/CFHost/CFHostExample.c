@@ -41,8 +41,8 @@
 #include <CFNetwork/CFNetwork.h>
 #include <CoreFoundation/CoreFoundation.h>
 
-#if !defined(LOG_CFHOST)
-#define LOG_CFHOST 0
+#if !defined(LOG_CFHOSTEXAMPLE)
+#define LOG_CFHOSTEXAMPLE 0
 #endif
 
 #define __CFHostExampleLog(format, ...)       do { fprintf(stderr, format, ##__VA_ARGS__); fflush(stderr); } while (0)
@@ -273,6 +273,8 @@ DemonstrateHostByName(Boolean *aAsync)
 static int
 DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, size_t length, Boolean *aAsync)
 {
+    const int           family = address->sa_family;
+    void *              ia;
     CFDataRef           addressData = NULL;
     CFHostRef           host = NULL;
     CFTypeID            type;
@@ -282,10 +284,30 @@ DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, si
     int                 status = -1;
 
     __CFHostExampleLog("By IPv%c address '%s' (Reverse DNS)...\n",
-                       ((address->sa_family == AF_INET) ? '4' : '6'),
+                       ((family == AF_INET) ? '4' : '6'),
                        addressString);
 
-    status = inet_pton(address->sa_family, addressString, address);
+    // Note that while CFHostCreateWithAddress takes CFData wrapping a sockaddr,
+    // inet_pton takes in_addr or in6_addr. Adjust by finding the appropriate
+    // pointer within 'address' to pass to inet_pton.
+
+    switch (family) {
+
+    case AF_INET:
+        ia = &((struct sockaddr_in *)(address))->sin_addr;
+        break;
+
+    case AF_INET6:
+        ia = &((struct sockaddr_in6 *)(address))->sin6_addr;
+        break;
+
+    default:
+        ia = NULL;
+        break;
+
+    }
+
+    status = inet_pton(family, addressString, ia);
     __Require_Action(status == 1, exit, status = -1);
 
     addressData = CFDataCreate(kCFAllocatorDefault,
