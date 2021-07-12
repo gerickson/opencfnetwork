@@ -271,9 +271,10 @@ static void _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, voi
 #if defined(__MACH__)
 static void _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 #endif
+static void _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, _CFHost * host, CFHostClientCallBack *cb, void **info, CFStreamError *error, Boolean lookup);
 #if defined(__MACH__)
 typedef void (*FreeNameInfoCallBack)(char *hostname, char *serv);
-static void _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb);
+static void _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean lookup);
 static void _GetNameInfoCallBack(int eai_status, char *hostname, char *serv, void* ctxt);
 static void _GetNameInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 #endif /* defined(__MACH__) */
@@ -1714,6 +1715,31 @@ _AresQueryCompletedCallBack(void *arg,
                                                  ares_request->_request_addrinfo,
                                                  ares_request->_request_host,
                                                  _AresFreeAddrInfo);
+                } else {
+                    _CFHost *            host = ares_request->_request_host;
+                    CFHostClientCallBack cb   = NULL;
+                    void *               info = NULL;
+                    CFStreamError        error;
+
+                    _GetNameInfoCallBackWithFree_NoLock(_AresStatusMapToAddrInfoError(status),
+                                                        hostent->h_name,
+                                                        NULL,
+                                                        host,
+                                                        &cb,
+                                                        &info,
+                                                        &error,
+                                                        ares_request->_request_host->_lookup != NULL);
+
+                    // If there is a callback, inform the client of the finish.
+                    if (cb) {
+                        // Unlock the host
+                        __CFSpinUnlock(&(host->_lock));
+
+                        cb((CFHostRef)host, kCFHostNames, &error, info);
+
+                        // Lock down the host again
+                        __CFSpinLock(&(host->_lock));
+                    }
                 }
 
                 if (ares_request->_request_lookup != NULL) {
@@ -2089,16 +2115,91 @@ _CreateNameLookup_Mach(CFDataRef address, void* context, CFStreamError* error) {
 #if HAVE_ARES_INIT && 1
 /* static */ CFFileDescriptorRef
 _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* error) {
-	CFFileDescriptorRef     result = NULL;
+    const int               optmask = ARES_OPT_SOCK_STATE_CB;
+    const struct sockaddr * sa = (const struct sockaddr *)CFDataGetBytePtr(address);
+    const int               family = sa->sa_family;
+    const void *            ia;
+    int                     ia_len;
+    struct ares_options     options;
+    _CFHostAresRequest *    ares_request = NULL;
+    int                     status;
+    CFFileDescriptorRef     result = NULL;
 
 	__CFHostTraceEnterWithFormat("address %p context %p error %p\n",
 							address, context, error);
 
-	if (error) {
-		error->error = EOPNOTSUPP;
-		error->domain = kCFStreamErrorDomainPOSIX;
-	}
+	ares_request = (_CFHostAresRequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFHostAresRequest), 0);
+	__Require_Action(ares_request != NULL,
+					 done,
+					 error->error  = ENOMEM;
+					 error->domain = kCFStreamErrorDomainPOSIX);
 
+    memset(ares_request, 0, sizeof(_CFHostAresRequest));
+
+    ares_request->_request_name    = NULL;
+    ares_request->_request_error   = error;
+    ares_request->_request_host    = context;
+
+    options.sock_state_cb      = _AresSocketStateCallBack;
+    options.sock_state_cb_data = ares_request;
+
+    status = ares_init_options(&ares_request->_request_channel,
+                               &options,
+                               optmask);
+    __Require_Action(status == ARES_SUCCESS,
+                     done,
+                     _AresStatusMapToStreamError(status, error);
+                     CFAllocatorDeallocate(kCFAllocatorDefault, ares_request));
+
+    ares_request->_request_pending = 1;
+
+    switch (family) {
+
+    case AF_INET:
+        ia = &((struct sockaddr_in *)(sa))->sin_addr;
+        ia_len = sizeof(struct in_addr);
+        break;
+
+    case AF_INET6:
+        ia = &((struct sockaddr_in6 *)(sa))->sin6_addr;
+        ia_len = sizeof(struct in6_addr);
+        break;
+
+    default:
+        ia = NULL;
+        ia_len = 0;
+        ares_request->_request_status = ARES_EBADFAMILY;
+        break;
+
+    }
+
+    if ((ia != NULL) && (ia_len > 0)) {
+        ares_gethostbyaddr(ares_request->_request_channel,
+                           ia,
+                           ia_len,
+                           family,
+                           _AresQueryCompletedCallBack,
+                           ares_request);
+    }
+
+    // It is possible, whether on error or whether on cache
+    // resolution, that we will land here without either
+    // _AresQueryCompletedCallBack (less likely) or
+    // _AresFileDescriptorRefCallBack (more likely) being called. If
+    // either of those cases is a non-success case, handle clean-up
+    // appropriately.
+
+    if (ares_request->_request_status != ARES_SUCCESS) {
+        _AresStatusMapToStreamError(status, error);
+
+        ares_destroy(ares_request->_request_channel);
+
+        CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
+    } else {
+        result = ares_request->_request_lookup;
+    }
+
+ done:
 	__CFHostTraceExitWithFormat("result %p\n", result);
 
 	return result;
@@ -2398,24 +2499,18 @@ _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* 
 
 	getaddrinfo_async_handle_reply(msg);
 }
+#endif /* defined(__MACH__) */
 
 /* static */ void
-_GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb) {
-
-	_CFHost* host = (_CFHost*)ctxt;
-	CFHostClientCallBack cb = NULL;
-	CFStreamError error;
-	void* info = NULL;
-
-	// Retain here to guarantee safety really after the lookups release,
-	// but definitely before the callback.
-	CFRetain((CFHostRef)host);
-
-	// Lock the host
-	__CFSpinLock(&host->_lock);
+_GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, _CFHost * host, CFHostClientCallBack *cb, void **info, CFStreamError *error, Boolean lookup) {
+    __Require(hostname != NULL, done);
+    __Require(host != NULL, done);
+    __Require(cb != NULL, done);
+    __Require(info != NULL, done);
+    __Require(error != NULL, done);
 
 	// If the lookup canceled, don't need to do any of this.
-	if (host->_lookup) {
+	if (!lookup || (lookup && (host->_lookup != NULL))) {
 
 		// Make sure to toss the cached info now.
 		CFDictionaryRemoveValue(host->_info, (const void*)kCFHostNames);
@@ -2463,23 +2558,54 @@ _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* c
 		}
 
 		// Save the callback if there is one at this time.
-		cb = host->_callback;
+		*cb = host->_callback;
 
 		// Save the error and client information for the callback
-		memmove(&error, &(host->_error), sizeof(error));
-		info = host->_client.info;
+		memmove(error, &(host->_error), sizeof(*error));
+		*info = host->_client.info;
 
-		// Remove the lookup from run loops and modes
-		_CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
+        if ((lookup == true) && (host->_lookup != NULL)) {
+            // Remove the lookup from run loops and modes
+            _CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
 
-		// Go ahead and invalidate the lookup
-		CFMachPortInvalidate((CFMachPortRef)(host->_lookup));
+            // Go ahead and invalidate the lookup
+            _CFTypeInvalidate(host->_lookup);
 
-		// Release the lookup now.
-		CFRelease(host->_lookup);
-		host->_lookup = NULL;
-		host->_type = _kCFNullHostInfoType;
+            // Release the lookup now.
+            CFRelease(host->_lookup);
+            host->_lookup = NULL;
+        }
+
+        host->_type = _kCFNullHostInfoType;
 	}
+
+ done:
+    return;
+}
+
+#if defined(__MACH__)
+/* static */ void
+_GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean lookup) {
+	_CFHost *            host = (_CFHost*)ctxt;
+	CFHostClientCallBack cb   = NULL;
+	void *               info = NULL;
+    CFStreamError        error;
+
+	// Retain here to guarantee safety really after the lookups release,
+	// but definitely before the callback.
+	CFRetain((CFHostRef)host);
+
+	// Lock the host
+	__CFSpinLock(&host->_lock);
+
+    _GetNameInfoCallBackWithFree_NoLock(eai_status,
+                                        hostname,
+                                        serv,
+                                        ctxt,
+                                        &cb,
+                                        &info,
+                                        &error,
+                                        lookup);
 
 	// Unlock the host so the callback can be made safely.
 	__CFSpinUnlock(&host->_lock);
@@ -3372,8 +3498,8 @@ CFHostGetInfo(CFHostRef theHost, CFHostInfoType info, Boolean* hasBeenResolved) 
 		*hasBeenResolved = TRUE;
 	}
 
-	// Unlock the host
-	__CFSpinUnlock(&(host->_lock));
+    // Unlock the host
+    __CFSpinUnlock(&(host->_lock));
 
 	return result;
 }
