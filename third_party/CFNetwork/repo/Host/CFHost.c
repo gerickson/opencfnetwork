@@ -101,8 +101,13 @@
 # include <signal.h>
 # include <sys/signalfd.h>
 # include <sys/syscall.h>
+# include <poll.h>
 # include <unistd.h>
 #endif /* defined(__MACH__) */
+
+#if HAVE_ARES_H
+#include <ares.h>
+#endif
 
 #if 0
 #pragma mark -
@@ -110,7 +115,7 @@
 #endif
 
 #if !defined(LOG_CFHOST)
-#define LOG_CFHOST 0
+#define LOG_CFHOST 1
 #endif
 
 #if LOG_CFHOST
@@ -168,14 +173,6 @@ CONST_STRING_DECL_LOCAL(_kCFHostDescribeFormat, "<CFHost 0x%x>{info=%@}")
 #pragma mark CFHost struct
 #endif
 
-#if defined(__linux__)
-typedef struct {
-	struct gaicb    _request_gaicb;
-	struct addrinfo _request_hints;
-	struct gaicb *  _request_list[1];
-} _CFGAIARequest;
-#endif /* defined(__linux__) */
-
 typedef struct {
 
 	CFRuntimeBase 			_base;
@@ -195,12 +192,34 @@ typedef struct {
 	CFHostClientContext		_client;
 } _CFHost;
 
+#if defined(__linux__)
+typedef struct {
+	struct gaicb    _request_gaicb;
+	struct addrinfo _request_hints;
+	struct gaicb *  _request_list[1];
+} _CFHostGAIARequest;
+
+typedef struct {
+    ares_channel        _request_channel;
+    size_t              _request_pending;
+    const char *        _request_name;
+    CFFileDescriptorRef _request_lookup;
+    uint16_t            _request_events;
+    CFStreamError *     _request_error;
+    int                 _request_status;
+    struct addrinfo *   _request_addrinfo;
+    _CFHost *           _request_host;
+} _CFHostAresRequest;
+#endif /* defined(__linux__) */
 
 #if 0
 #pragma mark -
 #pragma mark Static Function Declarations
 #endif
 
+#if defined(__linux__)
+static void _CFHostInitializeAres(void);
+#endif
 static void _CFHostRegisterClass(void);
 static _CFHost* _HostCreate(CFAllocatorRef allocator);
 
@@ -229,8 +248,9 @@ static int _CreateSignalFd(int signal, CFStreamError *error);
 static int _CreateAddressLookupRequest(const char *name, CFHostInfoType info, int signal, CFStreamError *error);
 static struct gaicb * _SignalFdGetAddrInfoResult(CFFileDescriptorRef fdref);
 static void _PrimaryAddressLookupCallBack_Linux(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
-static CFFileDescriptorRef _CreateAddressLookupSource(int signal, CFTypeRef context, CFStreamError *error);
-static CFFileDescriptorRef _CreatePrimaryAddressLookup_Linux(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
+static CFFileDescriptorRef _CreateAddressLookupSource_GetAddrInfo_A(int signal, CFTypeRef context, CFStreamError *error);
+static CFFileDescriptorRef _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
+static CFFileDescriptorRef _CreatePrimaryAddressLookup_Linux_GetAddrInfo_A(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
 #endif /* defined(__linux__) */
 static CFTypeRef _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStreamError* error);
 #if defined(__MACH__)
@@ -242,6 +262,8 @@ static CFMachPortRef _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void
 static CFFileDescriptorRef _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamError* error);
 static CFFileDescriptorRef _CreateNameLookup(CFDataRef address, void* context, CFStreamError* error);
 #endif /* defined(__linux__) */
+typedef void (*FreeAddrInfoCallBack)(struct addrinfo *res);
+static void _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *ctxt, FreeAddrInfoCallBack freeaddrinfo_cb);
 static void _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt);
 #if defined(__MACH__)
 static void _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
@@ -277,6 +299,9 @@ static Boolean _IsDottedIp(CFStringRef name);
 #endif
 
 static _CFOnceLock _kCFHostRegisterClass = _CFOnceInitializer;
+#if defined(__linux__)
+static _CFOnceLock _kCFHostInitializeAres = _CFOnceInitializer;
+#endif
 static CFTypeID _kCFHostTypeID = _kCFRuntimeNotATypeID;
 
 static _CFMutex* _HostLock;						/* Lock used for cache and master list */
@@ -288,6 +313,16 @@ static CFMutableDictionaryRef _HostCache;		/* Cached hostname lookups (successes
 #pragma mark -
 #pragma mark Static Function Definitions
 #endif
+
+/* static */ void
+_CFHostInitializeAres(void) {
+    __CFHostTraceEnter();
+
+    int status = ares_library_init(ARES_LIB_INIT_ALL);
+    __Verify_Action(status == ARES_SUCCESS, abort());
+
+    __CFHostTraceExit();
+}
 
 /* static */ void
 _CFHostRegisterClass(void) {
@@ -883,7 +918,13 @@ _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef cont
 #if defined(__MACH__)
 	result = _CreatePrimaryAddressLookup_Mach(name, info, context, error);
 #elif defined(__linux__)
-	result = _CreatePrimaryAddressLookup_Linux(name, info, context, error);
+# if HAVE_GETADDRINFO_A && 0
+	result = _CreatePrimaryAddressLookup_Linux_GetAddrInfo_A(name, info, context, error);
+# elif HAVE_ARES_INIT && 1
+    result = _CreatePrimaryAddressLookup_Linux_Ares(name, info, context, error);
+# else
+#  error "No Linux primary getaddrinfo/gethostbyname DNS lookup implementation!"
+# endif /* HAVE_GETADDRINFO_A */
 #else
 #warning "Platform portability issue!"
 #endif
@@ -1011,9 +1052,9 @@ _CreateSignalFd(int signal, CFStreamError *error) {
 
 /* static */ int
 _CreateAddressLookupRequest(const char *name, CFHostInfoType info, int signal, CFStreamError *error) {
-	struct sigevent  sigev;
-	_CFGAIARequest * gai_request = NULL;
-	int              result = -1;
+	struct sigevent      sigev;
+	_CFHostGAIARequest * gai_request = NULL;
+	int                  result = -1;
 
 	__CFHostTraceEnterWithFormat("name %p (%s) info 0x%x signal %d error %p\n",
 								 name, (name != NULL) ? name : "", info, signal, error);
@@ -1022,7 +1063,7 @@ _CreateAddressLookupRequest(const char *name, CFHostInfoType info, int signal, C
 
 	memset(&sigev, 0, sizeof(sigev));
   
-	gai_request = (_CFGAIARequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFGAIARequest), 0);
+	gai_request = (_CFHostGAIARequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFHostGAIARequest), 0);
 	__Require_Action(gai_request != NULL,
 					 done,
 					 result        = -ENOMEM;
@@ -1122,7 +1163,7 @@ _PrimaryAddressLookupCallBack_Linux(CFFileDescriptorRef fdref, CFOptionFlags cal
 }
 
 /* static */ CFFileDescriptorRef
-_CreateAddressLookupSource(int signal, CFTypeRef context, CFStreamError *error) {
+_CreateAddressLookupSource_GetAddrInfo_A(int signal, CFTypeRef context, CFStreamError *error) {
 	const Boolean           kCloseOnInvalidate = TRUE;
 	int                     sigfd;
     CFFileDescriptorContext fdrefContext = { 0, (void *)context, NULL, NULL, NULL };
@@ -1155,8 +1196,635 @@ _CreateAddressLookupSource(int signal, CFTypeRef context, CFStreamError *error) 
 	return result;
 }
 
+static int
+_AresStatusMapToAddrInfoError(int ares_status)
+{
+    int result;
+
+    switch (ares_status) {
+
+    case ARES_SUCCESS:
+        result = 0;
+        break;
+
+    case ARES_ENODATA:
+        result = EAI_NODATA;
+        break;
+
+    case ARES_ENOMEM:
+        result = EAI_MEMORY;
+        break;
+
+    case ARES_ECANCELLED:
+        result = EAI_CANCELED;
+        break;
+
+    case ARES_ENONAME:
+        result = EAI_NONAME;
+        break;
+
+    case ARES_EBADFLAGS:
+        result = EAI_BADFLAGS;
+        break;
+
+    case ARES_EBADFAMILY:
+        result = EAI_ADDRFAMILY;
+        break;
+
+    case ARES_EFORMERR:
+    case ARES_ESERVFAIL:
+    case ARES_ENOTFOUND:
+    case ARES_ENOTIMP:
+    case ARES_EREFUSED:
+    case ARES_EBADQUERY:
+    case ARES_EBADNAME:
+    case ARES_EBADRESP:
+    case ARES_ECONNREFUSED:
+    case ARES_ETIMEOUT:
+    case ARES_EOF:
+    case ARES_EFILE:
+    case ARES_EBADSTR:
+    case ARES_EBADHINTS:
+    case ARES_ENOTINITIALIZED:
+    case ARES_ELOADIPHLPAPI:
+    case ARES_EADDRGETNETWORKPARAMS:
+    case ARES_EDESTRUCTION:
+    default:
+        result = EAI_FAIL;
+        break;
+
+    }
+
+    return result;
+}
+
+static void
+_AresStatusMapToStreamError(int status, CFStreamError *error) {
+    int result;
+
+    switch (status) {
+
+    case ARES_SUCCESS:
+        error->error = 0;
+        error->domain = kCFStreamErrorDomainPOSIX;
+        break;
+
+    case ARES_ENODATA:
+        error->error = EAI_NODATA;
+        error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
+        break;
+
+    case ARES_ENOMEM:
+        error->error = EAI_MEMORY;
+        error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
+        break;
+
+    case ARES_ECANCELLED:
+        error->error = EAI_CANCELED;
+        error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
+        break;
+
+    case ARES_ENONAME:
+        error->error = EAI_NONAME;
+        error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
+        break;
+
+
+    case ARES_EBADFLAGS:
+        error->error = EAI_BADFLAGS;
+        error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
+        break;
+
+    case ARES_EBADFAMILY:
+        error->error = EAI_ADDRFAMILY;
+        error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
+        break;
+
+    case ARES_EFORMERR:
+    case ARES_ESERVFAIL:
+    case ARES_ENOTFOUND:
+    case ARES_ENOTIMP:
+    case ARES_EREFUSED:
+    case ARES_EBADQUERY:
+    case ARES_EBADNAME:
+    case ARES_EBADRESP:
+    case ARES_ECONNREFUSED:
+    case ARES_ETIMEOUT:
+    case ARES_EOF:
+    case ARES_EFILE:
+    case ARES_EBADSTR:
+    case ARES_EBADHINTS:
+    case ARES_ENOTINITIALIZED:
+    case ARES_ELOADIPHLPAPI:
+    case ARES_EADDRGETNETWORKPARAMS:
+    case ARES_EDESTRUCTION:
+    default:
+        error->error  = EAI_FAIL;
+        error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB;
+        break;
+
+    }
+}
+
+static void
+_AresFileDescriptorRefCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info) {
+    _CFHostAresRequest * ares_request = (_CFHostAresRequest *)(info);
+    CFFileDescriptorNativeDescriptor fd;
+    ares_socket_t readfd;
+    ares_socket_t writefd;
+    int status;
+
+	__CFHostTraceEnterWithFormat("fdref %p callBackTypes %lx info %p\n",
+								 fdref, callBackTypes, info);
+
+    __CFHostMaybeLog("%d: ares_request %p\n", __LINE__, ares_request);
+
+    fd = CFFileDescriptorGetNativeDescriptor(fdref);
+    __Require(fd != -1, done);
+
+    __CFHostMaybeLog("%d: fd %d\n", __LINE__, fd);
+
+    readfd = (ares_request->_request_events & POLLIN) ? fd : ARES_SOCKET_BAD;
+    writefd = (ares_request->_request_events & POLLOUT) ? fd : ARES_SOCKET_BAD;
+
+    __CFHostMaybeLog("%d: readfd %d writefd %d\n",
+                     __LINE__,
+                     readfd,
+                     writefd);
+
+    ares_process_fd(ares_request->_request_channel,
+                    readfd,
+                    writefd);
+
+    if (ares_request->_request_pending == 0) {
+        ares_destroy(ares_request->_request_channel);
+
+        // Release the request.
+
+        CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
+    }
+
+ done:
+    __CFHostTraceExit();
+}
+
+static void
+_AresSocketStateCallBack(void *data,
+                         ares_socket_t socket_fd,
+                         int readable,
+                         int writable) {
+	const Boolean           kCloseOnInvalidate = TRUE;
+    _CFHostAresRequest *    ares_request = (_CFHostAresRequest *)(data);
+    CFFileDescriptorContext fdContext = { 0, (void *)ares_request, NULL, NULL, NULL };
+	CFFileDescriptorRef     f = NULL;
+
+    __CFHostTraceEnterWithFormat("data %p socket_fd %d readable %d writable %d\n",
+                                 data, socket_fd, readable, writable);
+
+    __CFHostMaybeLog("%d: ares_request %p\n", __LINE__, ares_request);
+
+    if (ares_request != NULL) {
+        if (ares_request->_request_lookup == NULL) {
+            __CFHostMaybeLog("Allocating new CF file descriptor...\n");
+            f = CFFileDescriptorCreate(kCFAllocatorDefault,
+                                       socket_fd,
+                                       !kCloseOnInvalidate,
+                                       _AresFileDescriptorRefCallBack,
+                                       &fdContext);
+
+            __CFHostMaybeLog("%d: f %p\n", __LINE__, f);
+
+            if (!f) {
+                ares_request->_request_error->error = ENOMEM;
+                ares_request->_request_error->domain = kCFStreamErrorDomainPOSIX;
+
+            } else {
+                ares_request->_request_lookup = f;
+
+            }
+        }
+
+        if (ares_request->_request_lookup != NULL) {
+            __CFHostMaybeLog("Updating events and callbacks on existing CF file descriptor...\n");
+            if (readable) {
+                CFFileDescriptorEnableCallBacks(ares_request->_request_lookup, kCFFileDescriptorReadCallBack);
+                ares_request->_request_events |= POLLIN;
+            } else {
+                ares_request->_request_events &= ~POLLIN;
+            }
+
+            if (writable) {
+                CFFileDescriptorEnableCallBacks(ares_request->_request_lookup, kCFFileDescriptorWriteCallBack);
+                ares_request->_request_events |= POLLOUT;
+            } else {
+                ares_request->_request_events &= ~POLLOUT;
+            }
+
+            __CFHostMaybeLog("%d: ares_request (%p)->_request_events %hx\n",
+                             __LINE__,
+                             ares_request,
+                             ares_request->_request_events);
+        }
+    }
+
+    __CFHostTraceExit();
+}
+
+static void 
+LogName(const char *aType, const char *aName)
+{
+    __CFHostMaybeLog("%s: %s\n", aType, aName);
+}
+
+static void
+LogAddress(int aFamily, const char *aData)
+{
+    const size_t buflen = INET6_ADDRSTRLEN;
+    char         buffer[INET6_ADDRSTRLEN];
+    const void * addr;
+    socklen_t    addrlen;
+    const char * result;
+
+    switch (aFamily) {
+
+    case AF_INET:
+        addr = aData;
+        addrlen = sizeof(struct in_addr);
+        break;
+
+    case AF_INET6:
+        addr = aData;
+        addrlen = sizeof(struct in6_addr);
+        break;
+
+    default:
+        addr = NULL;
+        addrlen = 0;
+        break;
+
+    }
+    
+    if ((addr != NULL) && (addrlen > 0)) {
+        result = ares_inet_ntop(aFamily, addr, buffer, buflen);
+
+        if (result)
+        {
+            __CFHostMaybeLog("%s\n", buffer);
+        }
+    }
+}
+
+static void
+_AresFreeAddrInfo(struct addrinfo *res) {
+    struct addrinfo *current;
+    struct addrinfo * volatile next;
+
+    for (current = res; current != NULL; current = next) {
+        next = current->ai_next;
+        CFAllocatorDeallocate(kCFAllocatorDefault, current);
+    }
+}
+
+static struct addrinfo *
+_AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
+    int               status   = 0;
+    int               i;
+    char *            current  = NULL;
+    struct addrinfo * first    = NULL;
+    struct addrinfo * previous = NULL;
+    struct addrinfo * result   = NULL;
+
+    __CFHostTraceEnterWithFormat("hostent %p\n", hostent);
+
+    __Require_Action(hostent != NULL, map_status, status = EINVAL);
+    __Require_Action(hostent->h_name != NULL, map_status, status = EINVAL);
+    __Require_Action(hostent->h_addr_list != NULL, map_status, status = EINVAL);
+    __Require_Action(error != NULL, map_status, status = EINVAL);
+
+    for (i = 0; ((current = hostent->h_addr_list[i]) != NULL); i++)
+    {
+        const char kNull = '\0';
+        const int family = hostent->h_addrtype;
+        const size_t canonname_len = strlen(hostent->h_name) + sizeof(kNull);
+        size_t addr_size;
+        size_t total_size;
+        struct sockaddr_in *saddr;
+        struct sockaddr_in6 *saddr6;
+
+        __CFHostMaybeLog("strlen(hostent->h_name) %zu sizeof(kNull) %zu canonname_len %zu\n", strlen(hostent->h_name), sizeof(kNull), canonname_len);
+
+        switch (family) {
+
+        case AF_INET:
+            addr_size = sizeof(struct sockaddr_in);
+            break;
+
+        case AF_INET6:
+            addr_size = sizeof(struct sockaddr_in6);
+            break;
+
+        default:
+            addr_size = 0;
+            break;
+
+        }
+
+        __Require_Action(addr_size > 0,
+                         done,
+                         error->error  = EAI_ADDRFAMILY;
+                         error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB);
+
+        total_size = sizeof(struct addrinfo) + canonname_len + addr_size;
+
+        result = CFAllocatorAllocate(kCFAllocatorDefault, total_size, 0);
+        __Require_Action(result != NULL, map_status, status = ENOMEM);
+
+        memset(result, 0, total_size);
+
+        result->ai_addr      = (struct sockaddr *)((uint8_t *)result + sizeof(struct addrinfo));
+        result->ai_canonname = (char *)((uint8_t *)result->ai_addr + addr_size);
+
+        result->ai_family   = family;
+        result->ai_socktype = SOCK_STREAM;
+        result->ai_addrlen  = addr_size;
+
+        memcpy(result->ai_canonname, hostent->h_name, canonname_len);
+
+        switch (family) {
+
+        case AF_INET:
+            saddr = (struct sockaddr_in *)result->ai_addr;
+
+            memcpy(&saddr->sin_addr, current, sizeof(struct in_addr));
+            saddr->sin_family = family;
+            break;
+
+        case AF_INET6:
+            saddr6 = (struct sockaddr_in6 *)result->ai_addr;
+
+            memcpy(&saddr6->sin6_addr, current, sizeof(struct in6_addr));
+            saddr6->sin6_family = family;
+            break;
+
+        }
+
+        if (first == NULL)
+            first = result;
+
+        if (previous != NULL)
+            previous->ai_next = result;
+
+        previous = result;
+    }
+
+ map_status:
+    if (status != 0) {
+        error->error = status;
+        error->domain = kCFStreamErrorDomainPOSIX;
+
+        if (first != NULL) {
+            _AresFreeAddrInfo(first);
+            first = NULL;
+        }
+    }
+
+done:
+    __CFHostTraceExitWithFormat("first %p\n", first);
+
+    return first;
+}
+
+static void
+_AresAccumulateAddrInfo(_CFHostAresRequest *ares_request, struct addrinfo *ai) {
+    struct addrinfo *tail;
+
+    __CFHostTraceEnterWithFormat("ares_request %p ai %p\n",
+                                 ares_request, ai);
+
+    __Require(ares_request != NULL, done);
+    __Require(ai != NULL, done);
+
+    tail = ai;
+
+    // Find the tail node of the provided list.
+
+    while (tail->ai_next) {
+        tail = tail->ai_next;
+    }
+
+    // Point the tail node of the provided list at the last
+    // accumulated result.
+
+    tail->ai_next = ares_request->_request_addrinfo;
+
+    // Point the last accumulated result at the provided list.
+
+    ares_request->_request_addrinfo = ai;
+
+ done:
+  __CFHostTraceExit();
+}
+
+static void
+_AresQueryCompletedCallBack(void *arg,
+                            int status,
+                            int timeouts,
+                            struct hostent *hostent) {
+    _CFHostAresRequest *ares_request = (_CFHostAresRequest *)(arg);
+
+    __CFHostTraceEnterWithFormat("arg %p status %d timeouts %d hostent %p\n",
+                                 arg, status, timeouts, hostent);
+
+    __CFHostMaybeLog("%d: ares_request %p\n", __LINE__, ares_request);
+
+    if (status == ARES_SUCCESS)
+    {
+        if (hostent != NULL)
+        {
+            int i;
+            char *current;
+            struct addrinfo *ai;
+
+            if (hostent->h_name != NULL)
+            {
+                LogName("hostname", hostent->h_name);
+            }
+
+            if (hostent->h_aliases != NULL)
+            {
+                for (i = 0; ((current = hostent->h_aliases[i]) != NULL); i++)
+                {
+                    LogName("alias", current);
+                }
+            }
+
+            if (hostent->h_addr_list != NULL)
+            {
+                for (i = 0; ((current = hostent->h_addr_list[i]) != NULL); i++)
+                {
+                    LogAddress(hostent->h_addrtype,
+                               current);
+                }
+            }
+
+            ai = _AresHostentToAddrInfo(hostent, ares_request->_request_error);
+            if (ai != NULL) {
+                _AresAccumulateAddrInfo(ares_request, ai);
+            }
+
+            __CFHostMaybeLog("%d: ares_request (%p)->_request_pending %zu\n",
+                             __LINE__,
+                             ares_request,
+                             ares_request->_request_pending);
+
+            if (ares_request->_request_pending > 0)
+            {
+                ares_request->_request_pending--;
+            }
+
+            if (ares_request->_request_pending > 0) {
+                __CFHostMaybeLog("There are still lookup requests pending...\n");
+
+                if (ares_request->_request_lookup != NULL) {
+                    __CFHostMaybeLog("Re-enable callbacks!\n");
+
+                    CFFileDescriptorEnableCallBacks(ares_request->_request_lookup,
+                                                    kCFFileDescriptorReadCallBack);
+                }
+            } else if (ares_request->_request_pending == 0) {
+                __CFHostMaybeLog("There are no more lookup requests pending, cleaning up...\n");
+
+                // Invoke the common, shared getaddrinfo{,_a} callback.
+
+                _GetAddrInfoCallBackWithFree(_AresStatusMapToAddrInfoError(status),
+                                             ares_request->_request_addrinfo,
+                                             ares_request->_request_host,
+                                             _AresFreeAddrInfo);
+
+                if (ares_request->_request_lookup != NULL) {
+                    CFFileDescriptorInvalidate(ares_request->_request_lookup);
+                    CFRelease(ares_request->_request_lookup);
+                    ares_request->_request_lookup = NULL;
+                }
+
+                // Release the buffer that was previously allocated
+                // for the lookup name when the request was made.
+
+                CFAllocatorDeallocate(kCFAllocatorDefault, (void *)ares_request->_request_name);
+            }
+        }
+    } else if (status == ARES_ECANCELLED) {
+        __CFHostMaybeLog("%d: ares_request %p is being cancelled\n",
+                         __LINE__, ares_request);
+        __CFHostMaybeLog("%d: ares_request (%p)->_request_pending %zu\n",
+                         __LINE__,
+                         ares_request,
+                         ares_request->_request_pending);
+    }
+
+    __CFHostTraceExit();
+}
+
 /* static */ CFFileDescriptorRef
-_CreatePrimaryAddressLookup_Linux(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
+_CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
+	const CFAllocatorRef allocator = CFGetAllocator(name);
+    const int            optmask = ARES_OPT_SOCK_STATE_CB;
+	UInt8*               buffer;
+    struct ares_options  options;
+    _CFHostAresRequest * ares_request = NULL;
+    int                  status;
+    Boolean              ipv4only = FALSE;
+    Boolean              ipv6only = FALSE;
+    CFFileDescriptorRef  result = NULL;
+
+	__CFHostTraceEnterWithFormat("name %p info %x context %p error %p\n",
+							name, info, context, error);
+
+	// Create a CFString representation of the lookup by converting it
+	// into a null-terminated C string buffer consumable by
+	// getaddrinfo_a.
+
+	buffer = _CreateLookup_Common(name, error);
+	__Require(buffer != NULL, done);
+
+	ares_request = (_CFHostAresRequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFHostAresRequest), 0);
+	__Require_Action(ares_request != NULL,
+					 done,
+					 error->error  = ENOMEM;
+					 error->domain = kCFStreamErrorDomainPOSIX;
+                     CFAllocatorDeallocate(allocator, buffer));
+
+    __CFHostMaybeLog("%d: ares_request %p\n", __LINE__, ares_request);
+
+    memset(ares_request, 0, sizeof(_CFHostAresRequest));
+
+    ares_request->_request_name    = buffer;
+    ares_request->_request_error   = error;
+    ares_request->_request_host    = context;
+
+    __CFHostMaybeLog("%d: ares_request (%p)->_request_name %s\n",
+                     __LINE__,
+                     ares_request,
+                     ares_request->_request_name);
+
+    options.sock_state_cb      = _AresSocketStateCallBack;
+    options.sock_state_cb_data = ares_request;
+
+    status = ares_init_options(&ares_request->_request_channel,
+                               &options,
+                               optmask);
+    __Require_Action(status == ARES_SUCCESS,
+                     done,
+                     _AresStatusMapToStreamError(status, error);
+                     CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
+                     CFAllocatorDeallocate(allocator, buffer));
+
+	if (info == _kCFHostIPv4Addresses) {
+        ipv4only = TRUE;
+        ares_request->_request_pending = 1;
+	} else if (info == _kCFHostIPv6Addresses) {
+        ipv6only = TRUE;
+        ares_request->_request_pending = 1;
+	} else {
+        ares_request->_request_pending = 2;
+    }
+
+    __CFHostMaybeLog("%d: ares_request (%p)->_request_pending %zu\n",
+                     __LINE__,
+                     ares_request,
+                     ares_request->_request_pending);
+
+    if (!ipv6only) {
+        ares_gethostbyname(ares_request->_request_channel,
+                           ares_request->_request_name,
+                           AF_INET,
+                           _AresQueryCompletedCallBack,
+                           ares_request);
+    }
+
+    if (!ipv4only) {
+        ares_gethostbyname(ares_request->_request_channel,
+                           ares_request->_request_name,
+                           AF_INET6,
+                           _AresQueryCompletedCallBack,
+                           ares_request);
+    }
+
+    __CFHostMaybeLog("%d: ares_request (%p)->_request_pending %zu\n",
+                     __LINE__,
+                     ares_request,
+                     ares_request->_request_pending);
+
+    result = ares_request->_request_lookup;
+
+ done:
+	__CFHostTraceExitWithFormat("result %p\n", result);
+
+	return result;
+}
+
+/* static */ CFFileDescriptorRef
+_CreatePrimaryAddressLookup_Linux_GetAddrInfo_A(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
 	const CFAllocatorRef    allocator = CFGetAllocator(name);
 	UInt8*                  buffer;
 	const int               signal = __kCFHostLinuxSignalFdSignal;
@@ -1176,7 +1844,7 @@ _CreatePrimaryAddressLookup_Linux(CFStringRef name, CFHostInfoType info, CFTypeR
 	// Create the CFFileDescriptor-based lookup source that will
 	// handle the I/O for the asynchronous getaddrinfo_a call.
 
-	result = _CreateAddressLookupSource(signal, context, error);
+	result = _CreateAddressLookupSource_GetAddrInfo_A(signal, context, error);
 	__Require_Action(result != NULL, done, CFAllocatorDeallocate(allocator, buffer));
 
 	status = _CreateAddressLookupRequest((const char *)buffer, info, signal, error);
@@ -1511,7 +2179,7 @@ _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamEr
 	// Create the CFFileDescriptor-based lookup source that will
 	// handle the I/O for the asynchronous getaddrinfo_a call.
 
-	result = _CreateAddressLookupSource(signal, context, error);
+	result = _CreateAddressLookupSource_GetAddrInfo_A(signal, context, error);
 	__Require_Action(result != NULL, done, CFAllocatorDeallocate(allocator, buffer));
 
 	status = _CreateAddressLookupRequest((const char *)buffer, type, signal, error);
@@ -1532,9 +2200,10 @@ _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamEr
 }
 #endif /* defined(__linux__) */
 
-/* static */ void
-_GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt) {
+typedef void (*FreeAddrInfoCallBack)(struct addrinfo *res);
 
+/* static */ void
+_GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *ctxt, FreeAddrInfoCallBack freeaddrinfo_cb) {
 	_CFHost* host = (_CFHost*)ctxt;
 	CFHostClientCallBack cb = NULL;
 	CFStreamError error;
@@ -1660,7 +2329,9 @@ _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt) {
 
 	// Release the results if some were received.
     if (res) {
-        freeaddrinfo((struct addrinfo *)res);
+        if (freeaddrinfo_cb) {
+            freeaddrinfo_cb((struct addrinfo *)res);
+        }
 	}
 
 	// If there is a callback, inform the client of the finish.
@@ -1670,6 +2341,11 @@ _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt) {
 
 	// Go ahead and release now that the callback is done.
 	CFRelease((CFHostRef)host);
+}
+
+/* static */ void
+_GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt) {
+    _GetAddrInfoCallBackWithFree(eai_status, res, ctxt, freeaddrinfo);
 }
 
 #if defined(__MACH__)
@@ -2394,6 +3070,9 @@ _IsDottedIp(CFStringRef name) {
 CFHostGetTypeID(void) {
 
     _CFDoOnce(&_kCFHostRegisterClass, _CFHostRegisterClass);
+#if defined(__linux__)
+    _CFDoOnce(&_kCFHostInitializeAres, _CFHostInitializeAres);
+#endif /* defined(__linux__) */
 
     return _kCFHostTypeID;
 }
