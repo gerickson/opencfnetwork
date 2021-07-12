@@ -1687,8 +1687,15 @@ _AresQueryCompletedCallBack(void *arg,
                 if (ares_request->_request_lookup != NULL) {
                     __CFHostMaybeLog("Re-enable callbacks!\n");
 
-                    CFFileDescriptorEnableCallBacks(ares_request->_request_lookup,
-                                                    kCFFileDescriptorReadCallBack);
+                    if (ares_request->_request_events & POLLIN) {
+                        CFFileDescriptorEnableCallBacks(ares_request->_request_lookup,
+                                                        kCFFileDescriptorReadCallBack);
+                    }
+
+                    if (ares_request->_request_events & POLLOUT) {
+                        CFFileDescriptorEnableCallBacks(ares_request->_request_lookup,
+                                                        kCFFileDescriptorWriteCallBack);
+                    }
                 }
             } else if (ares_request->_request_pending == 0) {
                 __CFHostMaybeLog("There are no more lookup requests pending, cleaning up...\n");
