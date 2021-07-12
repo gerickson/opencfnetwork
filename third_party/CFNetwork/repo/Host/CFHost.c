@@ -1262,8 +1262,6 @@ _AresStatusMapToAddrInfoError(int ares_status)
 
 static void
 _AresStatusMapToStreamError(int status, CFStreamError *error) {
-    int result;
-
     switch (status) {
 
     case ARES_SUCCESS:
@@ -1334,7 +1332,6 @@ _AresFileDescriptorRefCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBack
     CFFileDescriptorNativeDescriptor fd;
     ares_socket_t readfd;
     ares_socket_t writefd;
-    int status;
 
 	__CFHostTraceEnterWithFormat("fdref %p callBackTypes %lx info %p\n",
 								 fdref, callBackTypes, info);
