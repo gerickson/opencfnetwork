@@ -250,7 +250,9 @@ static struct gaicb * _SignalFdGetAddrInfoResult(CFFileDescriptorRef fdref);
 static void _PrimaryAddressLookupCallBack_Linux(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
 static CFFileDescriptorRef _CreateAddressLookupSource_GetAddrInfo_A(int signal, CFTypeRef context, CFStreamError *error);
 static CFFileDescriptorRef _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
+#if HAVE_GETADDRINFO_A && 0
 static CFFileDescriptorRef _CreatePrimaryAddressLookup_Linux_GetAddrInfo_A(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
+#endif /* HAVE_GETADDRINFO_A && 0 */
 #endif /* defined(__linux__) */
 static CFTypeRef _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStreamError* error);
 #if defined(__MACH__)
@@ -1823,6 +1825,7 @@ _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CF
 	return result;
 }
 
+# if HAVE_GETADDRINFO_A && 0
 /* static */ CFFileDescriptorRef
 _CreatePrimaryAddressLookup_Linux_GetAddrInfo_A(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
 	const CFAllocatorRef    allocator = CFGetAllocator(name);
@@ -1863,6 +1866,7 @@ _CreatePrimaryAddressLookup_Linux_GetAddrInfo_A(CFStringRef name, CFHostInfoType
 
 	return result;
 }
+#endif /* # if HAVE_GETADDRINFO_A && 0 */
 #endif /* #if defined(__linux__) */
 
 /* static */ CFTypeRef
