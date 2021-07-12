@@ -271,9 +271,11 @@ static void _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, voi
 static void _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 #endif
 #if defined(__MACH__)
-static void _GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt);
+typedef void (*FreeNameInfoCallBack)(char *hostname, char *serv);
+static void _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb);
+static void _GetNameInfoCallBack(int eai_status, char *hostname, char *serv, void* ctxt);
 static void _GetNameInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
-#endif
+#endif /* defined(__MACH__) */
 #if defined(__MACH__)
 static void _NetworkReachabilityCallBack(SCNetworkReachabilityRef target, SCNetworkConnectionFlags flags, void* ctxt);
 static void _NetworkReachabilityByIPCallBack(_CFHost* host);
@@ -2366,7 +2368,7 @@ _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* 
 }
 
 /* static */ void
-_GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt) {
+_GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb) {
 
 	_CFHost* host = (_CFHost*)ctxt;
 	CFHostClientCallBack cb = NULL;
@@ -2387,8 +2389,8 @@ _GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt) {
 		CFDictionaryRemoveValue(host->_info, (const void*)kCFHostNames);
 
 		// Set the error if got one back from getnameinfo
-		if (status) {
-			_HandleGetAddrInfoStatus(status, &host->_error, FALSE);
+		if (eai_status) {
+			_HandleGetAddrInfoStatus(eai_status, &host->_error, FALSE);
 
 			// Mark to indicate the resolution was performed.
 			CFDictionaryAddValue(host->_info, (const void*)kCFHostNames, kCFNull);
@@ -2451,8 +2453,9 @@ _GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt) {
 	__CFSpinUnlock(&host->_lock);
 
 	// Release the results if there were any.
-	if (serv) free(serv);
-	if (hostname) free(hostname);
+    if (freenameinfo_cb) {
+        freenameinfo_cb(hostname, serv);
+    }
 
 	// If there is a callback, inform the client of the finish.
 	if (cb)
@@ -2460,6 +2463,17 @@ _GetNameInfoCallBack(int32_t status, char *hostname, char *serv, void* ctxt) {
 
 	// Go ahead and release now that the callback is done.
 	CFRelease((CFHostRef)host);
+}
+
+/* static */ void
+_FreeNameInfoCallBack_Mach(char *hostname, char *serv) {
+    if (hostname) free(hostname);
+    if (serv) free (serv);
+}
+
+/* static */ void
+_GetNameInfoCallBack(int eai_status, char *hostname, char *serv, void* ctxt) {
+    _GetNameInfoCallBackWithFree(eai_status, hostname, serv, ctxt, _FreeNameInfoCallBack_Mach, TRUE);
 }
 
 /* static */ void
