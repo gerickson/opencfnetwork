@@ -1733,6 +1733,8 @@ _AresQueryCompletedCallBack(void *arg,
                          ares_request->_request_pending);
     }
 
+    ares_request->_request_status = status;
+
     __CFHostTraceExit();
 }
 
