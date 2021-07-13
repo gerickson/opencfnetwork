@@ -292,7 +292,7 @@ AM_CONDITIONAL(OPENCFNETWORK_BUILD_DOCS, [test "${nl_cv_build_docs}" = "yes"])
 # At minimum, the following packages are optional, depending on
 # configuration:
 #
-#   * TBD
+#   * c-ares
 #
 AC_MSG_NOTICE([checking required package dependencies])
 
@@ -300,7 +300,6 @@ AC_MSG_NOTICE([checking required package dependencies])
 
 AC_PATH_PROG([PKG_CONFIG],[pkg-config])
 
-#
 #
 # [Open]CFLite
 #
@@ -322,6 +321,31 @@ NL_WITH_REQUIRED_EXTERNAL_PACKAGE([CoreFoundation],
             )
 
     AC_LANG_POP
+]
+)
+
+#
+# c-ares
+#
+NL_WITH_OPTIONAL_EXTERNAL_PACKAGE([c-ares],
+[ARES],
+[libcares],
+[-lcares],
+[
+    # Check for required OpenSSL headers.
+
+    AC_LANG_PUSH([C])
+
+        AC_CHECK_HEADERS([ares.h],
+            [],
+            [
+                AC_MSG_ERROR(The c-ares header "$ac_header" is required but cannot be found.)
+            ]
+            )
+
+    AC_LANG_POP
+
+    AC_CHECK_FUNCS([ares_init])
 ]
 )
 
@@ -369,7 +393,14 @@ if test "${ac_no_link}" != "yes"; then
     AC_CHECK_FUNCS([memcpy])
 
     AC_SEARCH_LIBS([getaddrinfo_a], [anl])
+    AC_CHECK_FUNCS([getaddrinfo_a])
 fi
+
+# Add any c-ares CPPFLAGS, LDFLAGS, and LIBS
+
+CPPFLAGS="${CPPFLAGS} ${ARES_CPPFLAGS}"
+LIBS="${LIBS} ${ARES_LIBS}"
+LDFLAGS="${LDFLAGS} ${ARES_LDFLAGS}"
 
 # Add any CoreFoundation CPPFLAGS, LDFLAGS, and LIBS
 
@@ -440,6 +471,10 @@ AC_MSG_NOTICE([
   Doxygen                                   : ${DOXYGEN:--}
   GraphViz dot                              : ${DOT:--}
   PERL                                      : ${PERL:--}
+  C-Ares source                             : ${nl_with_libcares:--}
+  C-Ares compile flags                      : ${ARES_CPPFLAGS:--}
+  C-Ares link flags                         : ${ARES_LDFLAGS:--}
+  C-Ares link libraries                     : ${ARES_LIBS:--}
   CoreFoundation source                     : ${nl_with_CoreFoundation:--}
   CoreFoundation compile flags              : ${CF_CPPFLAGS:--}
   CoreFoundation link flags                 : ${CF_LDFLAGS:--}
