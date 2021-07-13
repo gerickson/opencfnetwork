@@ -67,8 +67,9 @@
 extern "C" {
 #endif
 
-#pragma options align=mac68k
-
+#if PRAGMA_OPTIONS_ALIGN
+    #pragma options align=mac68k
+#endif
 
 /*
  *  _CFServerRef
@@ -282,8 +283,9 @@ extern void
 _CFServerInvalidate(_CFServerRef server)                      AVAILABLE_MAC_OS_X_VERSION_10_3_AND_LATER;
 
 
-
-#pragma options align=reset
+#if PRAGMA_OPTIONS_ALIGN
+    #pragma options align=reset
+#endif
 
 #ifdef __cplusplus
 }

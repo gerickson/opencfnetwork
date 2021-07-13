@@ -64,7 +64,9 @@
 extern "C" {
 #endif
 
-#pragma options align=mac68k
+#if PRAGMA_OPTIONS_ALIGN
+    #pragma options align=mac68k
+#endif
 
 #if PRAGMA_ENUM_ALWAYSINT
     #pragma enumsalwaysint on
@@ -662,7 +664,9 @@ CFHostUnscheduleFromRunLoop(
     #pragma enumsalwaysint reset
 #endif
 
-#pragma options align=reset
+#if PRAGMA_OPTIONS_ALIGN
+    #pragma options align=reset
+#endif
 
 #ifdef __cplusplus
 }
