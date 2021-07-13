@@ -47,7 +47,7 @@
 
 #define __CFHostExampleLog(format, ...)       do { fprintf(stderr, format, ##__VA_ARGS__); fflush(stderr); } while (0)
 
-#if LOG_CFHOST
+#if LOG_CFHOSTEXAMPLE
 #define __CFHostExampleMaybeLog(format, ...)                           \
     __CFHostExampleLog(format, ##__VA_ARGS__)
 #else
@@ -78,7 +78,7 @@ LogResult(CFIndex aIndex, const char *aResult)
 {
     __CFHostExampleLog("        %lu: %s\n",
                        aIndex,
-                       (aResult != NULL) ? aResult : "<???>");
+                       (aResult != NULL) ? aResult : "<\?\?\?>");
 }
 
 static void
@@ -227,6 +227,35 @@ StartResolution(CFHostRef aHost, CFHostInfoType aInfo, Boolean aAsync)
 }
 
 static int
+DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
+{
+    CFTypeID            type;
+    CFHostClientContext context = { 0, aAsync, NULL, NULL, NULL };
+    Boolean             set;
+    Boolean             started;
+    int                 status = -1;
+
+    type = CFGetTypeID(aHost);
+    __Require_Action(type == CFHostGetTypeID(), done, status = -1);
+
+    set = CFHostSetClient(aHost, HostCallBack, &context);
+    __Require_Action(set, done, status = -1);
+
+    GetAndLogAddressesAndNames(aHost, FALSE);
+
+    started = StartResolution(aHost, aInfo, *aAsync);
+    __Require_Action(started, done, status = -1);
+
+ done:
+    set = CFHostSetClient(aHost, NULL, NULL);
+    __Require_Action(set, done, status = -1);
+
+    status = 0;
+
+    return (status);
+}
+
+static int
 DemonstrateHostByName(Boolean *aAsync)
 {
     CFStringRef         name = CFSTR("localhost");
@@ -234,35 +263,17 @@ DemonstrateHostByName(Boolean *aAsync)
     char                buffer[MAXHOSTNAMELEN];
     Boolean             converted = CFStringGetCString(name, buffer, buflen, kCFStringEncodingASCII);
     CFHostRef           host = NULL;
-    CFTypeID            type;
-    CFHostClientContext context = { 0, aAsync, NULL, NULL, NULL };
-    Boolean             set;
-    Boolean             started;
     int                 status = -1;
 
     __CFHostExampleLog("By name '%s' (DNS)...\n", converted ? buffer : NULL);
 
     host = CFHostCreateWithName(kCFAllocatorDefault, name);
-    __Require_Action(host != NULL, exit, status = -1);
+    __Require_Action(host != NULL, done, status = -1);
 
-    type = CFGetTypeID(host);
-    __Require_Action(type == CFHostGetTypeID(), exit, status = -1);
-
-    set = CFHostSetClient(host, HostCallBack, &context);
-    __Require_Action(set, exit, status = -1);
-
-    GetAndLogAddressesAndNames(host, FALSE);
-
-    started = StartResolution(host, kCFHostAddresses, *aAsync);
-    __Require_Action(started, done, status = -1);
+    status = DemonstrateHostCommon(host, kCFHostAddresses, aAsync);
+    __Require(status == 0, done);
 
  done:
-    set = CFHostSetClient(host, NULL, NULL);
-    __Require_Action(set, exit, status = -1);
-
-    status = 0;
-
- exit:
     if (host != NULL) {
         CFRelease(host);
     }
@@ -277,10 +288,6 @@ DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, si
     void *              ia;
     CFDataRef           addressData = NULL;
     CFHostRef           host = NULL;
-    CFTypeID            type;
-    CFHostClientContext context = { 0, aAsync, NULL, NULL, NULL };
-    Boolean             set;
-    Boolean             started;
     int                 status = -1;
 
     __CFHostExampleLog("By IPv%c address '%s' (Reverse DNS)...\n",
@@ -308,38 +315,26 @@ DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, si
     }
 
     status = inet_pton(family, addressString, ia);
-    __Require_Action(status == 1, exit, status = -1);
+    __Require_Action(status == 1, done, status = -1);
 
     addressData = CFDataCreate(kCFAllocatorDefault,
                                (const UInt8 *)address,
                                length);
-    __Require_Action(addressData != NULL, exit, status = -1);
+    __Require_Action(addressData != NULL, done, status = -1);
 
     host = CFHostCreateWithAddress(kCFAllocatorDefault, addressData);
-    __Require_Action(host != NULL, exit, status = -1);
+    __Require_Action(host != NULL, done, status = -1);
 
-    CFRelease(addressData);
-
-    type = CFGetTypeID(host);
-    __Require_Action(type == CFHostGetTypeID(), exit, status = -1);
-
-    set = CFHostSetClient(host, HostCallBack, &context);
-    __Require_Action(set, exit, status = -1);
-
-    GetAndLogAddressesAndNames(host, FALSE);
-
-    started = StartResolution(host, kCFHostNames, *aAsync);
-    __Require_Action(started, done, status = -1);
+    status = DemonstrateHostCommon(host, kCFHostNames, aAsync);
+    __Require(status == 0, done);
 
  done:
-    set = CFHostSetClient(host, NULL, NULL);
-    __Require_Action(set, exit, status = -1);
-
-    status = 0;
-
- exit:
     if (host != NULL) {
         CFRelease(host);
+    }
+
+    if (addressData != NULL) {
+        CFRelease(addressData);
     }
 
     return (status);
