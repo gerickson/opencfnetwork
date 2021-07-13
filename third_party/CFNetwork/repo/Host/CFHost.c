@@ -115,7 +115,7 @@
 #endif
 
 #if !defined(LOG_CFHOST)
-#define LOG_CFHOST 1
+#define LOG_CFHOST 0
 #endif
 
 #if LOG_CFHOST
