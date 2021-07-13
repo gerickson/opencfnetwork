@@ -2197,6 +2197,15 @@ _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* er
         CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
     } else {
         result = ares_request->_request_lookup;
+
+        // If the result is NULL, then we had a callback-free lookup
+        // and can destroy the channel and the request.
+
+        if (result == NULL) {
+            ares_destroy(ares_request->_request_channel);
+
+            CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
+        }
     }
 
  done:
