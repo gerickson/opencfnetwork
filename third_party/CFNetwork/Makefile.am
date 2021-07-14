@@ -105,6 +105,7 @@ libCFNetwork_la_SOURCES         =                                       \
     repo/SharedCode/CFNetworkSchedule.c                                 \
     repo/SharedCode/CFNetworkThreadSupport.c                            \
     repo/SharedCode/CFServer.c                                          \
+    repo/SharedCode/CFStreamError.c                                     \
     repo/Stream/CFSocketStream.c                                        \
     repo/URL/_CFURLAccess.c                                             \
     $(NULL)
