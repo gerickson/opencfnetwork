@@ -942,7 +942,7 @@ _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef cont
 
 #if defined(__MACH__)
 /* static */ CFMachPortRef
-_CreateMasterAddressLookup_Mach(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
+_CreatePrimaryAddressLookup_Mach(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
 
 	const CFAllocatorRef allocator = CFGetAllocator(name);
 	UInt8* buffer;
