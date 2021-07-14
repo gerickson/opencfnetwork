@@ -60,16 +60,6 @@
 #include "NTLM/NtlmGenerator.h"
 #endif // __MACH__
 
-#if HAVE_OPENSSL_BIO_H
-#include <openssl/bio.h>
-#endif
-#if HAVE_OPENSSL_EVP_H
-#include <openssl/evp.h>
-#endif
-#if HAVE_OPENSSL_MD5_H
-#include <openssl/md5.h>
-#endif
-
 #if defined(__WIN32__)
 // allows code using inet_addr() to port easily to Win32
 typedef unsigned long in_addr_t;
@@ -1113,11 +1103,10 @@ CFStringRef _CFEncodeBase64(CFAllocatorRef allocator, CFDataRef inputData) {
 	CFStringRef result = NULL;
 #if defined(__MACH__)
 	unsigned char *outData = cuEnc64(CFDataGetBytePtr(inputData), CFDataGetLength(inputData), &outDataLen);
-#elif HAVE_BIO_F_BASE64
+#else
 	outDataLen = 0;
 	unsigned char *outData = NULL;
-#else
-#error "Platform portability issue!"
+#warning "Platform portability issue!"
 #endif
 	
 	if(outData) {
@@ -1151,11 +1140,10 @@ CFDataRef _CFDecodeBase64(CFAllocatorRef allocator, CFStringRef str) {
 		unsigned decoded;
 #if defined(__MACH__)
 		unsigned char* decode = cuDec64(buffer, length, &decoded);
-#elif HAVE_BIO_F_BASE64
+#else
 		decoded = 0;
 		unsigned char * decode = NULL;
-#else
-#error "Platform portability issue!"
+#warning "Platform portability issue!"
 #endif
 
 		if (buffer != stack_buffer)
@@ -1364,13 +1352,6 @@ Boolean _CFMD5(const UInt8* d, UInt32 n, UInt8* md, UInt32 md_length) {
 	CC_MD5_Init(&ctx);
 	CC_MD5_Update(&ctx, d, n);
 	CC_MD5_Final(md, &ctx);
-
-	return TRUE;
-#elif HAVE_MD5_INIT
-	MD5_CTX ctx;
-	MD5_Init(&ctx);
-	MD5_Update(&ctx, d, n);
-	MD5_Final(md, &ctx);
 
 	return TRUE;
 #else
