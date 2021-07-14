@@ -190,12 +190,17 @@ HostCallBack(CFHostRef aHost, CFHostInfoType aInfo, const CFStreamError *aError,
 {
     Boolean *   async = ((Boolean *)(aContext));
 
-    if (aInfo == kCFHostAddresses) {
-        GetAndLogAddresses(aHost, *async);
+    if (aError->error == 0) {
+        if (aInfo == kCFHostAddresses) {
+            GetAndLogAddresses(aHost, *async);
 
-    } else if (aInfo == kCFHostNames) {
-        GetAndLogNames(aHost, *async);
+        } else if (aInfo == kCFHostNames) {
+            GetAndLogNames(aHost, *async);
 
+        }
+    } else {
+        __CFHostExampleLog("Resolution failed with error %d.%ld\n",
+                           aError->error, aError->domain);
     }
 
     CFHostCancelInfoResolution(aHost, aInfo);
@@ -204,7 +209,7 @@ HostCallBack(CFHostRef aHost, CFHostInfoType aInfo, const CFStreamError *aError,
 static Boolean
 StartResolution(CFHostRef aHost, CFHostInfoType aInfo, Boolean aAsync)
 {
-    CFStreamError error;
+    CFStreamError error = { 0, 0 };
     Boolean       result;
 
     if (aAsync) {
