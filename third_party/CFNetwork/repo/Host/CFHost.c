@@ -1333,6 +1333,29 @@ _AresStatusMapToStreamError(int status, CFStreamError *error) {
 }
 
 static void
+_MaybeReenableRequestCallBacks(_CFHostAresRequest *aRequest)
+{
+    __Require(aRequest != NULL, done);
+
+    if (aRequest->_request_lookup != NULL) {
+        __CFHostMaybeLog("Re-enable callbacks!\n");
+
+        if (aRequest->_request_events & POLLIN) {
+            CFFileDescriptorEnableCallBacks(aRequest->_request_lookup,
+                                            kCFFileDescriptorReadCallBack);
+        }
+
+        if (aRequest->_request_events & POLLOUT) {
+            CFFileDescriptorEnableCallBacks(aRequest->_request_lookup,
+                                            kCFFileDescriptorWriteCallBack);
+        }
+    }
+
+ done:
+    return;
+}
+
+static void
 _AresFileDescriptorRefCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info) {
     _CFHostAresRequest * ares_request = (_CFHostAresRequest *)(info);
     CFFileDescriptorNativeDescriptor fd;
@@ -1367,6 +1390,8 @@ _AresFileDescriptorRefCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBack
         // Release the request.
 
         CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
+    } else {
+        _MaybeReenableRequestCallBacks(ares_request);
     }
 
  done:
@@ -1412,18 +1437,18 @@ _AresSocketStateCallBack(void *data,
         if (ares_request->_request_lookup != NULL) {
             __CFHostMaybeLog("Updating events and callbacks on existing CF file descriptor...\n");
             if (readable) {
-                CFFileDescriptorEnableCallBacks(ares_request->_request_lookup, kCFFileDescriptorReadCallBack);
                 ares_request->_request_events |= POLLIN;
             } else {
                 ares_request->_request_events &= ~POLLIN;
             }
 
             if (writable) {
-                CFFileDescriptorEnableCallBacks(ares_request->_request_lookup, kCFFileDescriptorWriteCallBack);
                 ares_request->_request_events |= POLLOUT;
             } else {
                 ares_request->_request_events &= ~POLLOUT;
             }
+
+            _MaybeReenableRequestCallBacks(ares_request);
 
             __CFHostMaybeLog("%d: ares_request (%p)->_request_events %hx\n",
                              __LINE__,
@@ -1692,19 +1717,7 @@ _AresQueryCompletedCallBack(void *arg,
             if (ares_request->_request_pending > 0) {
                 __CFHostMaybeLog("There are still lookup requests pending...\n");
 
-                if (ares_request->_request_lookup != NULL) {
-                    __CFHostMaybeLog("Re-enable callbacks!\n");
-
-                    if (ares_request->_request_events & POLLIN) {
-                        CFFileDescriptorEnableCallBacks(ares_request->_request_lookup,
-                                                        kCFFileDescriptorReadCallBack);
-                    }
-
-                    if (ares_request->_request_events & POLLOUT) {
-                        CFFileDescriptorEnableCallBacks(ares_request->_request_lookup,
-                                                        kCFFileDescriptorWriteCallBack);
-                    }
-                }
+                _MaybeReenableRequestCallBacks(ares_request);
             } else if (ares_request->_request_pending == 0) {
                 __CFHostMaybeLog("There are no more lookup requests pending, cleaning up...\n");
 
