@@ -287,7 +287,7 @@ static void _NetworkReachabilityByIPCallBack(_CFHost* host);
 static void _DNSCallBack(int32_t status, char *buf, uint32_t len, struct sockaddr *from, int fromlen, void *context);
 static void _DNSMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 #endif
-static void _MasterCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamError *error, CFStringRef name);
+static void _PrimaryLookupCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamError *error, CFStringRef name);
 static void _AddressLookupSchedule_NoLock(_CFHost* host, CFRunLoopRef rl, CFStringRef mode);
 static void _AddressLookupPerform(_CFHost* host);
 
@@ -1994,7 +1994,7 @@ _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStr
 					CFRelease(host);
 
 					/* Set the client for asynchronous callback. */
-					CFHostSetClient(host, (CFHostClientCallBack)_MasterCallBack, &ctxt);
+					CFHostSetClient(host, (CFHostClientCallBack)_PrimaryLookupCallBack, &ctxt);
 
 					/* Kick off the resolution.  NULL the client if the resolution can't start. */
 					started = CFHostStartInfoResolution(host, _kCFHostMasterAddressLookup, error);
@@ -2891,7 +2891,7 @@ _DNSMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info) {
 #endif /* #if defined(__MACH__) */
 
 /* static */ void
-_MasterCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamError *error, CFStringRef name) {
+_PrimaryLookupCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamError *error, CFStringRef name) {
 
 	CFArrayRef list;
 
