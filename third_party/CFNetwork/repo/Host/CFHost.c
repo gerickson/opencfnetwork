@@ -2422,6 +2422,11 @@ _CreateDNSLookup_Linux(CFTypeRef thing, CFHostInfoType info, void* context, CFSt
 
 	CFShow(thing);
 
+    // It is not clear that this function is practically reachable as
+    // CFHost and CFNetwork are currently implemented. Trigger an
+    // unconditional assertion if any use pratically traverses this
+    // path such that it can be properly documented and tested.
+
     assert(TRUE);
 
     result = (CFFileDescriptorRef)_CreateMasterAddressLookup(thing, info, context, error);
