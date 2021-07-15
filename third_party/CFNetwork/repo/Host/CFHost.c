@@ -343,8 +343,10 @@ static void                     _AresStatusMapToStreamError(int status, CFStream
 static void                     _CFHostInitializeAres(void);
 static CFFileDescriptorRef      _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* error);
 static CFFileDescriptorRef      _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
+#if LOG_CFHOST
 static void                     _LogAddress(int aFamily, const char *aData);
 static void                     _LogName(const char *aType, const char *aName);
+#endif /* LOG_CFHOST */
 static void                     _MaybeReenableRequestCallBacks(_CFHostAresRequest *aRequest);
 #endif /* HAVE_ARES_INIT && 1 */
 
@@ -1609,11 +1611,7 @@ _AresSocketStateCallBack(void *data,
     __CFHostTraceExit();
 }
 
-/* static */ void
-_LogName(const char *aType, const char *aName) {
-    __CFHostMaybeLog("%s: %s\n", aType, aName);
-}
-
+#if LOG_CFHOST
 /* static */ void
 _LogAddress(int aFamily, const char *aData) {
     const size_t buflen = INET6_ADDRSTRLEN;
@@ -1644,12 +1642,17 @@ _LogAddress(int aFamily, const char *aData) {
     if ((addr != NULL) && (addrlen > 0)) {
         result = ares_inet_ntop(aFamily, addr, buffer, buflen);
 
-        if (result)
-        {
+        if (result) {
             __CFHostMaybeLog("%s\n", buffer);
         }
     }
 }
+
+/* static */ void
+_LogName(const char *aType, const char *aName) {
+    __CFHostMaybeLog("%s: %s\n", aType, aName);
+}
+#endif /* LOG_CFHOST */
 
 /* static */ void
 _AresFreeAddrInfo(struct addrinfo *res) {
@@ -1803,10 +1806,9 @@ _AresQueryCompletedCallBack(void *arg,
     {
         if (hostent != NULL)
         {
-            int i;
-            char *current;
             struct addrinfo *ai;
 
+#if LOG_CFHOST
             if (hostent->h_name != NULL)
             {
                 _LogName("hostname", hostent->h_name);
@@ -1822,12 +1824,16 @@ _AresQueryCompletedCallBack(void *arg,
 
             if (hostent->h_addr_list != NULL)
             {
+                int   i;
+                char *current;
+
                 for (i = 0; ((current = hostent->h_addr_list[i]) != NULL); i++)
                 {
                     _LogAddress(hostent->h_addrtype,
                                 current);
                 }
             }
+#endif /* LOG_CFHOST */
 
             if (ares_request->_request_name != NULL) {
                 ai = _AresHostentToAddrInfo(hostent, ares_request->_request_error);
