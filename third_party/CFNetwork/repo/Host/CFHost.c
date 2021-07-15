@@ -232,7 +232,7 @@ static Boolean _HostBlockUntilComplete(_CFHost* host);
 
 static Boolean _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176);
 
-static UInt8* _CreateLookup_Common(CFTypeRef thing, CFStreamError* error);
+static UInt8* _CFStringToCStringWithError(CFTypeRef thing, CFStreamError* error);
 static void _HandleGetAddrInfoStatus(int eai_status, CFStreamError* error, Boolean intuitStatus);
 static void _InitGetAddrInfoHints(CFHostInfoType info, struct addrinfo *hints);
 static CFTypeRef _CreateMasterAddressLookup(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
@@ -789,7 +789,7 @@ _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176)
 }
 
 /* static */ UInt8*
-_CreateLookup_Common(CFTypeRef thing, CFStreamError* error) {
+_CFStringToCStringWithError(CFTypeRef thing, CFStreamError* error) {
 	const CFAllocatorRef allocator = CFGetAllocator(thing);
 	const CFIndex        length    = CFStringGetLength((CFStringRef)thing);
 	CFIndex              converted;
@@ -948,7 +948,7 @@ _CreatePrimaryAddressLookup_Mach(CFStringRef name, CFHostInfoType info, CFTypeRe
 	UInt8* buffer;
 	CFMachPortRef result = NULL;
 
-	buffer = _CreateLookup_Common(name, error);
+	buffer = _CFStringToCStringWithError(name, error);
 
 	if (!buffer)
 		return result;
@@ -1805,7 +1805,7 @@ _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CF
 	// into a null-terminated C string buffer consumable by
 	// getaddrinfo_a.
 
-	buffer = _CreateLookup_Common(name, error);
+	buffer = _CFStringToCStringWithError(name, error);
 	__Require(buffer != NULL, done);
 
 	ares_request = (_CFHostAresRequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFHostAresRequest), 0);
@@ -1900,7 +1900,7 @@ _CreatePrimaryAddressLookup_Linux_GetAddrInfo_A(CFStringRef name, CFHostInfoType
 	// into a null-terminated C string buffer consumable by
 	// getaddrinfo_a.
 
-	buffer = _CreateLookup_Common(name, error);
+	buffer = _CFStringToCStringWithError(name, error);
 	__Require(buffer != NULL, done);
 
 	// Create the CFFileDescriptor-based lookup source that will
@@ -2247,7 +2247,7 @@ _CreateReachabilityLookup(CFTypeRef thing, void* context, CFStreamError* error) 
 		const CFAllocatorRef allocator = CFGetAllocator(thing);
 		UInt8* buffer;
 
-		buffer = _CreateLookup_Common(thing, error);
+		buffer = _CFStringToCStringWithError(thing, error);
 
 		if (!buffer)
 			return result;
@@ -2293,7 +2293,7 @@ _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamEr
 	UInt8* buffer;
 	CFMachPortRef result = NULL;
 
-	buffer = _CreateLookup_Common(thing, error);
+	buffer = _CFStringToCStringWithError(thing, error);
 
 	if (!buffer)
 		return result;
@@ -2340,7 +2340,7 @@ _CreateDNSLookup(CFTypeRef thing, CFHostInfoType type, void* context, CFStreamEr
 	// into a null-terminated C string buffer consumable by
 	// getaddrinfo_a.
 
-	buffer = _CreateLookup_Common(thing, error);
+	buffer = _CFStringToCStringWithError(thing, error);
 	__Require(buffer != NULL, done);
 
 	// Create the CFFileDescriptor-based lookup source that will
