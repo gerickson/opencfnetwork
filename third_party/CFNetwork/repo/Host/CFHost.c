@@ -884,6 +884,22 @@ _CFStringToCStringWithError(CFTypeRef thing, CFStreamError* error) {
 	return result;
 }
 
+/**
+ *  @brief
+ *    Handle and map status returned by 'getaddrinfo*' to a
+ *    CFStreamError.
+ *
+ *  This maps status returned by 'getaddrinfo*' and friends to
+ *  a CFStreamError object.
+ *
+ *  @param[in]   eai_status    The getaddrinfo status to map.
+ *  @param[out]  error         A pointer to the CFStreamError object
+ *                             to map the getaddrinfo status to.
+ *  @param[in]   intuitStatus  If the @a eai_status is zero (0), when
+ *                             asserted attempt to further intuit the
+ *                             status based on 'errno'.
+ *
+ */
 /* static */ void
 _HandleGetAddrInfoStatus(int eai_status, CFStreamError* error, Boolean intuitStatus) {
 	if (eai_status != 0) {
@@ -914,6 +930,22 @@ _HandleGetAddrInfoStatus(int eai_status, CFStreamError* error, Boolean intuitSta
 }
 
 #if defined(__MACH__) || (HAVE_GETADDRINFO_A && 0)
+/**
+ *  @brief
+ *    Establish the hint data passed to 'getaddrinfo*' and friends.
+ *
+ *  This establishes the hint data passed to 'getaddrinfo*' and
+ *  friends for a forward DNS (that is, name-to-address) lookup based
+ *  on the specified host info query type.
+ *
+ *  @param[in]      info     A value of type CFHostInfoType
+ *                           specifying the type of information that
+ *                           is to be retrieved. See #CFHostInfoType
+ *                           for possible values.
+ *  @param[out]     hints    A pointer to storage in which to store
+ *                           the hint data.
+ *
+ */
 /* static */ void
 _InitGetAddrInfoHints(CFHostInfoType info, struct addrinfo *hints) {
 #ifdef AI_PARALLEL
