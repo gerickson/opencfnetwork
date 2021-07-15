@@ -384,6 +384,12 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
+
+# Presently 'include' is not enumerated here since it is covered by
+# the top-level makefile.  Including it redundantly here will cause
+# 'make distclean' to fail since the top-level makefile recursion into
+# it for that target will remove its makefile resulting in recursion
+# from this one failing.
 SUBDIRS = \
     $(NULL)
 
