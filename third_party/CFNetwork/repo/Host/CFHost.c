@@ -193,22 +193,70 @@ typedef struct {
 } _CFHost;
 
 #if defined(__linux__)
+/**
+ *  @brief
+ *    The active heap-based object used to manage forward DNS look-ups
+ *    with Linux, glibc, and getaddrinfo_a.
+ *
+ *  This represents all of the active state needed to manage
+ *  outstanding forward DNS look-ups using Linux, glibc, and
+ *  getaddrinfo_a.
+ *
+ *  @note
+ *    Since there is no equivalent getnameinfo_a in Linux with glibc,
+ *    this portability approach for CFHost on Linux is, for now, a
+ *    dead end and undesirable.
+ *
+ */
 typedef struct {
 	struct gaicb    _request_gaicb;
 	struct addrinfo _request_hints;
 	struct gaicb *  _request_list[1];
 } _CFHostGAIARequest;
 
+/**
+ *  @brief
+ *    The active heap-based object used to manage forward- and
+ *    reverse- DNS look-ups with c-ares.
+ *
+ *  This represents all of the active state needed to manage
+ *  outstanding forward- and reverse DNS look-ups using c-ares.
+ *
+ *  @note
+ *    c-ares supports the notion of an effective timeout for lookup
+ *    channel, via 'ares_timeout'. However, the CFileDescriptor
+ *    object, while simpler for this application, does not effecitvely
+ *    support a timeout for watched descriptors and implies a higher
+ *    poll/select rate for a pending request than were a timeout
+ *    supported. If timeout behavior is desired, CFFileDescriptor
+ *    could be unilaterally changed with CFSocket.
+ *
+ */
 typedef struct {
-    ares_channel        _request_channel;
-    size_t              _request_pending;
-    const char *        _request_name;
-    CFFileDescriptorRef _request_lookup;
-    uint16_t            _request_events;
-    CFStreamError *     _request_error;
-    int                 _request_status;
-    struct addrinfo *   _request_addrinfo;
-    _CFHost *           _request_host;
+    ares_channel        _request_channel;  //!< The c-ares name service
+                                           //!< channel used to initiate
+                                           //!< requests and receive responses.
+    size_t              _request_pending;  //!< The number of channel requests
+    const char *        _request_name;     //!< The lookup name for forward
+                                           //!< DNS (that is, name-to-address)
+                                           //!< requests.
+    CFFileDescriptorRef _request_lookup;   //!< The run loop schedulable
+                                           //!< object that will be poll/
+                                           //!< select'd for request/response
+                                           //!< activity.
+    uint16_t            _request_events;   //!< The poll/select events
+                                           //!< currently desired for
+                                           //!< _request_lookup.
+    CFStreamError *     _request_error;    //!< A pointer to the stream error
+                                           //!< for the most recent request.
+    int                 _request_status;   //!< The stream status for the most
+                                           //!< recent request.
+    struct addrinfo *   _request_addrinfo; //!< A pointer to the synthesized
+                                           //!< and accumulated head-based
+                                           //!< addrinfo as successful request
+                                           //!< responses are processed.
+    _CFHost *           _request_host;     //!< A pointer to the host object
+                                           //!< associated with the request(s).
 } _CFHostAresRequest;
 #endif /* defined(__linux__) */
 
