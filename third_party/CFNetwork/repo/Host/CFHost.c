@@ -330,6 +330,9 @@ static struct gaicb *           _SignalFdGetAddrInfoResult(CFFileDescriptorRef f
 
 #if HAVE_ARES_INIT && 1
 static void                     _AresAccumulateAddrInfo(_CFHostAresRequest *ares_request, struct addrinfo *ai);
+static void                     _AresClearOrSetRequestEvents(_CFHostAresRequest *ares_request,
+                                                             uint16_t event,
+                                                             Boolean set);
 static void                     _AresFileDescriptorRefCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
 static void                     _AresFreeAddrInfo(struct addrinfo *res);
 static void                     _AresQueryCompletedCallBack(void *arg, int status, int timeouts, struct hostent *hostent);
@@ -1542,6 +1545,17 @@ _AresFileDescriptorRefCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBack
 }
 
 /* static */ void
+_AresClearOrSetRequestEvents(_CFHostAresRequest * ares_request,
+                             uint16_t event,
+                             Boolean set) {
+    if (set) {
+        ares_request->_request_events |= event;
+    } else {
+        ares_request->_request_events &= ~event;
+    }
+}
+
+/* static */ void
 _AresSocketStateCallBack(void *data,
                          ares_socket_t socket_fd,
                          int readable,
@@ -1579,17 +1593,9 @@ _AresSocketStateCallBack(void *data,
 
         if (ares_request->_request_lookup != NULL) {
             __CFHostMaybeLog("Updating events and callbacks on existing CF file descriptor...\n");
-            if (readable) {
-                ares_request->_request_events |= POLLIN;
-            } else {
-                ares_request->_request_events &= ~POLLIN;
-            }
+            _AresClearOrSetRequestEvents(ares_request, POLLIN,  readable);
 
-            if (writable) {
-                ares_request->_request_events |= POLLOUT;
-            } else {
-                ares_request->_request_events &= ~POLLOUT;
-            }
+            _AresClearOrSetRequestEvents(ares_request, POLLOUT, writable);
 
             _MaybeReenableRequestCallBacks(ares_request);
 
