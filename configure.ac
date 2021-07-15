@@ -391,9 +391,6 @@ AC_CHECK_MEMBERS(
 
 if test "${ac_no_link}" != "yes"; then
     AC_CHECK_FUNCS([memcpy])
-
-    AC_SEARCH_LIBS([getaddrinfo_a], [anl])
-    AC_CHECK_FUNCS([getaddrinfo_a])
 fi
 
 # Add any c-ares CPPFLAGS, LDFLAGS, and LIBS
