@@ -2550,11 +2550,11 @@ _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *c
 						continue;
 
 					// Wrap the address in a CFData
-#if defined(__MACH__)
+#if HAVE_STRUCT_SOCKADDR_SA_LEN
 					length = i->ai_addr->sa_len;
 #else
                     length = _AddressSizeForSupportedFamily(family);
-#endif /* defined(__MACH__) */
+#endif /* HAVE_STRUCT_SOCKADDR_SA_LEN */
 					if (length > 0) {
 						data = CFDataCreate(allocator, (UInt8*)(i->ai_addr), length);
 					}
