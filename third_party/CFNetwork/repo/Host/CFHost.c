@@ -280,6 +280,7 @@ typedef void (*FreeAddrInfoCallBack)(struct addrinfo *res);
 
 static void                     _AddressLookupPerform(_CFHost* host);
 static void                     _AddressLookupSchedule_NoLock(_CFHost* host, CFRunLoopRef rl, CFStringRef mode);
+static size_t                   _AddressSizeForSupportedFamily(int family);
 static CFArrayRef               _CFArrayCreateDeepCopy(CFAllocatorRef alloc, CFArrayRef array);
 static void                     _CFHostRegisterClass(void);
 static UInt8*                   _CFStringToCStringWithError(CFTypeRef thing, CFStreamError* error);
@@ -1683,22 +1684,7 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
 
         __CFHostMaybeLog("strlen(hostent->h_name) %zu sizeof(kNull) %zu canonname_len %zu\n", strlen(hostent->h_name), sizeof(kNull), canonname_len);
 
-        switch (family) {
-
-        case AF_INET:
-            addr_size = sizeof(struct sockaddr_in);
-            break;
-
-        case AF_INET6:
-            addr_size = sizeof(struct sockaddr_in6);
-            break;
-
-        default:
-            addr_size = 0;
-            break;
-
-        }
-
+        addr_size = _AddressSizeForSupportedFamily(family);
         __Require_Action(addr_size > 0,
                          done,
                          error->error  = EAI_ADDRFAMILY;
@@ -2469,6 +2455,29 @@ _CreateDNSLookup_Linux(CFTypeRef thing, CFHostInfoType info, void* context, CFSt
 }
 #endif /* defined(__linux__) */
 
+/* static */ size_t
+_AddressSizeForSupportedFamily(int family) {
+    size_t result;
+
+    switch (family) {
+
+    case AF_INET:
+        result = sizeof(struct sockaddr_in);
+        break;
+
+    case AF_INET6:
+        result = sizeof(struct sockaddr_in6);
+        break;
+
+    default:
+        result = 0;
+        break;
+
+    }
+
+    return result;
+}
+
 /* static */ void
 _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *ctxt, FreeAddrInfoCallBack freeaddrinfo_cb) {
 	_CFHost* host = (_CFHost*)ctxt;
@@ -2520,22 +2529,19 @@ _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *c
 				
 				// Loop through all of the addresses saving them in the array.
 				for (i = res; i; i = i->ai_next) {
-
-					CFDataRef data = NULL;
-					CFIndex length = 0;
+                    const int family = i->ai_addr->sa_family;
+					CFDataRef data   = NULL;
+					CFIndex   length = 0;
 					
 					// Bypass any address families that are not understood by CFSocketStream
-					if (i->ai_addr->sa_family != AF_INET && i->ai_addr->sa_family != AF_INET6)
+					if (family != AF_INET && family != AF_INET6)
 						continue;
 
 					// Wrap the address in a CFData
 #if defined(__MACH__)
 					length = i->ai_addr->sa_len;
 #else
-					if (i->ai_addr->sa_family == AF_INET)
-						length = sizeof(struct sockaddr_in);
-					else if (i->ai_addr->sa_family == AF_INET6)
-						length = sizeof(struct sockaddr_in6);
+                    length = _AddressSizeForSupportedFamily(family);
 #endif /* defined(__MACH__) */
 					if (length > 0) {
 						data = CFDataCreate(allocator, (UInt8*)(i->ai_addr), length);
