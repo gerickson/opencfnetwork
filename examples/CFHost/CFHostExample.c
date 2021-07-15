@@ -142,6 +142,13 @@ GetAndLogAddresses(CFHostRef aHost, Boolean aAsync)
         }
     }
 
+    // There are two hallmarks of a synchronous versus asynchronous
+    // lookup: starting and stopping the run loop is one of
+    // them, setting a client callback is the other.
+    //
+    // If the operation is asynchronous, stop the previously-started
+    // run loop.
+
     if (aAsync && resolved) {
         CFRunLoopStop(CFRunLoopGetCurrent());
     }
@@ -172,6 +179,13 @@ GetAndLogNames(CFHostRef aHost, Boolean aAsync)
 			}
         }
     }
+
+    // There are two hallmarks of a synchronous versus asynchronous
+    // lookup: starting and stopping the run loop is one of
+    // them, setting a client callback is the other.
+    //
+    // If the operation is asynchronous, stop the previously-started
+    // run loop.
 
     if (aAsync && resolved) {
         CFRunLoopStop(CFRunLoopGetCurrent());
@@ -212,6 +226,13 @@ StartResolution(CFHostRef aHost, CFHostInfoType aInfo, Boolean aAsync)
     CFStreamError error = { 0, 0 };
     Boolean       result;
 
+    // There are two hallmarks of a synchronous versus asynchronous
+    // lookup: starting and stopping the run loop is one of
+    // them, setting a client callback is the other.
+    //
+    // If the operation is asynchronous, schedule the host for run
+    // loop operation.
+
     if (aAsync) {
         CFHostScheduleWithRunLoop(aHost, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
     }
@@ -219,11 +240,24 @@ StartResolution(CFHostRef aHost, CFHostInfoType aInfo, Boolean aAsync)
     result = CFHostStartInfoResolution(aHost, aInfo, &error);
     __Require(result, done);
 
+    // There are two hallmarks of a synchronous versus asynchronous
+    // lookup: starting and stopping the run loop is one of
+    // them, setting a client callback is the other.
+    //
+    // If the operation is asynchronous, start the run loop.
+
     if (aAsync) {
         CFRunLoopRun();
     }
 
  done:
+    // There are two hallmarks of a synchronous versus asynchronous
+    // lookup: starting and stopping the run loop is one of
+    // them, setting a client callback is the other.
+    //
+    // If the operation is asynchronous, unschedule the host from run
+    // loop operation.
+
     if (aAsync) {
         CFHostUnscheduleFromRunLoop(aHost, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
     }
@@ -243,8 +277,17 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
     type = CFGetTypeID(aHost);
     __Require_Action(type == CFHostGetTypeID(), done, status = -1);
 
-    set = CFHostSetClient(aHost, HostCallBack, &context);
-    __Require_Action(set, done, status = -1);
+    // There are two hallmarks of a synchronous versus asynchronous
+    // lookup: setting a client callback is one of them, starting and
+    // stopping the run loop is the other.
+    //
+    // If the operation is asynchronous, set the asynchronous client
+    // callback.
+
+    if (*aAsync == TRUE) {
+        set = CFHostSetClient(aHost, HostCallBack, &context);
+        __Require_Action(set, done, status = -1);
+    }
 
     GetAndLogAddressesAndNames(aHost, FALSE);
 
@@ -252,8 +295,17 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
     __Require_Action(started, done, status = -1);
 
  done:
-    set = CFHostSetClient(aHost, NULL, NULL);
-    __Require_Action(set, done, status = -1);
+    // There are two hallmarks of a synchronous versus asynchronous
+    // lookup: setting a client callback is one of them, starting and
+    // stopping the run loop is the other.
+    //
+    // If the operation is asynchronous, clear the asynchronous client
+    // callback.
+
+    if (*aAsync == TRUE) {
+        set = CFHostSetClient(aHost, NULL, NULL);
+        __Require_Action(set, done, status = -1);
+    }
 
     status = 0;
 
