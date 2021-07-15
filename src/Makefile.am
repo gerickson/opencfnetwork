@@ -25,8 +25,13 @@
 
 include $(abs_top_nlbuild_autotools_dir)/automake/pre.am
 
+# Presently 'include' is not enumerated here since it is covered by
+# the top-level makefile.  Including it redundantly here will cause
+# 'make distclean' to fail since the top-level makefile recursion into
+# it for that target will remove its makefile resulting in recursion
+# from this one failing.
+
 SUBDIRS     = \
-    include   \
     $(NULL)
 
 include $(abs_top_nlbuild_autotools_dir)/automake/post.am
