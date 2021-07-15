@@ -1486,8 +1486,6 @@ _MaybeReenableRequestCallBacks(_CFHostAresRequest *aRequest) {
     __Require(aRequest != NULL, done);
 
     if (aRequest->_request_lookup != NULL) {
-        __CFHostMaybeLog("Re-enable callbacks!\n");
-
         if (aRequest->_request_events & POLLIN) {
             CFFileDescriptorEnableCallBacks(aRequest->_request_lookup,
                                             kCFFileDescriptorReadCallBack);
@@ -1505,32 +1503,42 @@ _MaybeReenableRequestCallBacks(_CFHostAresRequest *aRequest) {
 
 /* static */ void
 _AresFileDescriptorRefCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info) {
-    _CFHostAresRequest * ares_request = (_CFHostAresRequest *)(info);
+    _CFHostAresRequest *             ares_request = (_CFHostAresRequest *)(info);
     CFFileDescriptorNativeDescriptor fd;
-    ares_socket_t readfd;
-    ares_socket_t writefd;
+    ares_socket_t                    readfd;
+    ares_socket_t                    writefd;
 
 	__CFHostTraceEnterWithFormat("fdref %p callBackTypes %lx info %p\n",
 								 fdref, callBackTypes, info);
 
-    __CFHostMaybeLog("%d: ares_request %p\n", __LINE__, ares_request);
+    // Get the platform-native descriptor associated with the
+    // descriptor object.
 
     fd = CFFileDescriptorGetNativeDescriptor(fdref);
     __Require(fd != -1, done);
 
-    __CFHostMaybeLog("%d: fd %d\n", __LINE__, fd);
+    // Determine, based on flags established in the c-ares descriptor
+    // callback, whether that platform-native descriptor will be used
+    // for reading and/or writing.
 
     readfd = (ares_request->_request_events & POLLIN) ? fd : ARES_SOCKET_BAD;
     writefd = (ares_request->_request_events & POLLOUT) ? fd : ARES_SOCKET_BAD;
 
-    __CFHostMaybeLog("%d: readfd %d writefd %d\n",
-                     __LINE__,
-                     readfd,
-                     writefd);
+    // Request c-ares to process any data pending in the channel on
+    // the platform-native descriptor for reading and/or writing.
 
     ares_process_fd(ares_request->_request_channel,
                     readfd,
                     writefd);
+
+    // If there are no further requests pending, destroy the channel
+    // and dealloctae the request object that contains it. The
+    // descriptor object itself will be deallocated when it is removed
+    // from the run loop.
+    //
+    // Otherwise, re-enable the one-shot callback(s) for this
+    // descriptor object so that additional data can be processed, if
+    // necessary.
 
     if (ares_request->_request_pending == 0) {
         ares_destroy(ares_request->_request_channel);
@@ -1557,6 +1565,40 @@ _AresClearOrSetRequestEvents(_CFHostAresRequest * ares_request,
     }
 }
 
+/**
+ *  @brief
+ *    Call back invoked whenever a socket associated with a c-ares
+ *    channel request changes state.
+ *
+ *  This is the call back handler invoked whenever a socket associated
+ *  with a c-ares channel request changes state, including first-time
+ *  creation as well as transitioning into and out of read- or
+ *  writability.
+ *
+ *  @note
+ *    As noted above in the description of #_CFHostAresRequest, c-ares
+ *    supports the notion of an effective timeout for lookup channel,
+ *    via 'ares_timeout'. However, the CFileDescriptor object, while
+ *    simpler for this application, does not effecitvely support a
+ *    timeout for watched descriptors and implies a higher poll/select
+ *    rate for a pending request than were a timeout supported. If
+ *    timeout behavior is desired, CFFileDescriptor could be
+ *    unilaterally changed to CFSocket.
+ *
+ *  @param[in,out]  data       A pointer to call back-specific data
+ *                             registered with 'ares_init_options';
+ *                             here, a pointer to the heap-based
+ *                             object associated with the socket and
+ *                             its associated c-ares request channel.
+ *  @param[in]      socket_fd  The socket associated with the c-ares
+ *                             request channel whose state has
+ *                             changed.
+ *  @param[in]      readable   True if the socket should listen for
+ *                             read events.
+ *  @param[in]      writable   True if the socket should listen for
+ *                             write events.
+ *
+ */
 /* static */ void
 _AresSocketStateCallBack(void *data,
                          ares_socket_t socket_fd,
@@ -1564,51 +1606,57 @@ _AresSocketStateCallBack(void *data,
                          int writable) {
 	const Boolean           kCloseOnInvalidate = TRUE;
     _CFHostAresRequest *    ares_request = (_CFHostAresRequest *)(data);
-    CFFileDescriptorContext fdContext = { 0, (void *)ares_request, NULL, NULL, NULL };
-	CFFileDescriptorRef     f = NULL;
+    CFFileDescriptorContext fdContext    = { 0, (void *)ares_request, NULL, NULL, NULL };
+	CFFileDescriptorRef     fdref        = NULL;
 
-    __CFHostTraceEnterWithFormat("data %p socket_fd %d readable %d writable %d\n",
-                                 data, socket_fd, readable, writable);
+    __Require(ares_request != NULL, done);
+    __Require_Action(socket_fd != ARES_SOCKET_BAD,
+                     done,
+                     ares_request->_request_error->error = EBADF;
+                     ares_request->_request_error->domain = kCFStreamErrorDomainPOSIX);
 
-    __CFHostMaybeLog("%d: ares_request %p\n", __LINE__, ares_request);
+    // As with the larger CFHost object, the 'lookup' is the
+    // CoreFoundation-compatible and run loop-schedulable object that
+    // will handle asynchronous I/O activity for the host lookup
+    // request.
+    //
+    // So, first, if no descriptor object has yet been associated with
+    // this c-ares channel socket, attempt to allocate one. Do NOT
+    // close the socket on invalidation of the descriptor object;
+    // c-ares will handle that when the channel is destroyed.
 
-    if (ares_request != NULL) {
-        if (ares_request->_request_lookup == NULL) {
-            __CFHostMaybeLog("Allocating new CF file descriptor...\n");
-            f = CFFileDescriptorCreate(kCFAllocatorDefault,
+    if (ares_request->_request_lookup == NULL) {
+        fdref = CFFileDescriptorCreate(kCFAllocatorDefault,
                                        socket_fd,
                                        !kCloseOnInvalidate,
                                        _AresFileDescriptorRefCallBack,
                                        &fdContext);
 
-            __CFHostMaybeLog("%d: f %p\n", __LINE__, f);
+        if (fdref == NULL) {
+            ares_request->_request_error->error = ENOMEM;
+            ares_request->_request_error->domain = kCFStreamErrorDomainPOSIX;
 
-            if (!f) {
-                ares_request->_request_error->error = ENOMEM;
-                ares_request->_request_error->domain = kCFStreamErrorDomainPOSIX;
+        } else {
+            ares_request->_request_lookup = fdref;
 
-            } else {
-                ares_request->_request_lookup = f;
-
-            }
-        }
-
-        if (ares_request->_request_lookup != NULL) {
-            __CFHostMaybeLog("Updating events and callbacks on existing CF file descriptor...\n");
-            _AresClearOrSetRequestEvents(ares_request, POLLIN,  readable);
-
-            _AresClearOrSetRequestEvents(ares_request, POLLOUT, writable);
-
-            _MaybeReenableRequestCallBacks(ares_request);
-
-            __CFHostMaybeLog("%d: ares_request (%p)->_request_events %hx\n",
-                             __LINE__,
-                             ares_request,
-                             ares_request->_request_events);
         }
     }
 
-    __CFHostTraceExit();
+    // Second, whether we just allocated it anew or are back here due
+    // to subsequent socket state changes, update the poll/select
+    // event flags appropriate for this socket which will ultimately
+    // determine--in various locations, including here--which
+    // descriptor object call backs are enabled.
+
+    if (ares_request->_request_lookup != NULL) {
+        _AresClearOrSetRequestEvents(ares_request, POLLIN,  readable);
+        _AresClearOrSetRequestEvents(ares_request, POLLOUT, writable);
+
+        _MaybeReenableRequestCallBacks(ares_request);
+    }
+
+ done:
+    return;
 }
 
 #if LOG_CFHOST
@@ -1654,9 +1702,21 @@ _LogName(const char *aType, const char *aName) {
 }
 #endif /* LOG_CFHOST */
 
+/**
+ *  Deallocate addrinfo created by #_AresHostentToAddrInfo.
+ *
+ *  @note
+ *    Do NOT call freeaddrinfo instead of this for addrinfo that was
+ *    created by #_AresHostentToAddrInfo! At best, undefined behavior
+ *    will result. At worst, it will result in a crash or data
+ *    corruption.
+ *
+ *  @param[in]  res  A pointer to the addrinfo to deallocate.
+ *
+ */
 /* static */ void
 _AresFreeAddrInfo(struct addrinfo *res) {
-    struct addrinfo *current;
+    struct addrinfo *          current;
     struct addrinfo * volatile next;
 
     for (current = res; current != NULL; current = next) {
@@ -1667,19 +1727,20 @@ _AresFreeAddrInfo(struct addrinfo *res) {
 
 /* static */ struct addrinfo *
 _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
-    int               status   = 0;
     int               i;
+    int               status   = 0;
     char *            current  = NULL;
     struct addrinfo * first    = NULL;
     struct addrinfo * previous = NULL;
     struct addrinfo * result   = NULL;
 
-    __CFHostTraceEnterWithFormat("hostent %p\n", hostent);
-
     __Require_Action(hostent != NULL, map_status, status = EINVAL);
     __Require_Action(hostent->h_name != NULL, map_status, status = EINVAL);
     __Require_Action(hostent->h_addr_list != NULL, map_status, status = EINVAL);
     __Require_Action(error != NULL, map_status, status = EINVAL);
+
+    // Loop over each hostent address and create and map it into an
+    // addrinfo.
 
     for (i = 0; ((current = hostent->h_addr_list[i]) != NULL); i++)
     {
@@ -1691,7 +1752,12 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
         struct sockaddr_in *saddr;
         struct sockaddr_in6 *saddr6;
 
-        __CFHostMaybeLog("strlen(hostent->h_name) %zu sizeof(kNull) %zu canonname_len %zu\n", strlen(hostent->h_name), sizeof(kNull), canonname_len);
+        // Determine how large the socket address data at the tail of
+        // the allocated addrinfo block should be.
+        //
+        // If the size is not greater than zero, it is not an
+        // Internet-based address family; there's nothing more to do
+        // here. Set the error and bail out.
 
         addr_size = _AddressSizeForSupportedFamily(family);
         __Require_Action(addr_size > 0,
@@ -1699,12 +1765,24 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
                          error->error  = EAI_ADDRFAMILY;
                          error->domain = (CFStreamErrorDomain)kCFStreamErrorDomainNetDB);
 
-        total_size = sizeof(struct addrinfo) + canonname_len + addr_size;
+        // Allocate the addrinfo block as well as enough data to
+        // contain both the trailing-but-inlined socket address and
+        // canonical name data. This inlining simplifies having to
+        // maintain and manage two additional dangling heap pointers
+        // for this information.
+
+        total_size = sizeof(struct addrinfo) + addr_size + canonname_len;
 
         result = CFAllocatorAllocate(kCFAllocatorDefault, total_size, 0);
         __Require_Action(result != NULL, map_status, status = ENOMEM);
 
         memset(result, 0, total_size);
+
+        // Set the addrinfo address pointer to the
+        // trailing-but-inlined socket address and canonical name
+        // data. The socket address is set first to avoid any
+        // alignment issues with that structure that might otherwise
+        // result from following an arbitrarily-sized canonical name.
 
         result->ai_addr      = (struct sockaddr *)((uint8_t *)result + sizeof(struct addrinfo));
         result->ai_canonname = (char *)((uint8_t *)result->ai_addr + addr_size);
@@ -1714,6 +1792,9 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
         result->ai_addrlen  = addr_size;
 
         memcpy(result->ai_canonname, hostent->h_name, canonname_len);
+
+        // Copy the actual address data from the current hostent
+        // address to the addrinfo socket address.
 
         switch (family) {
 
@@ -1733,6 +1814,8 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
 
         }
 
+        // Chain up the addrinfo data, as created.
+
         if (first == NULL)
             first = result;
 
@@ -1742,7 +1825,7 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
         previous = result;
     }
 
- map_status:
+map_status:
     if (status != 0) {
         error->error = status;
         error->domain = kCFStreamErrorDomainPOSIX;
@@ -1754,8 +1837,6 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
     }
 
 done:
-    __CFHostTraceExitWithFormat("first %p\n", first);
-
     return first;
 }
 
