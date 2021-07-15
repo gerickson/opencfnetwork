@@ -1993,13 +1993,22 @@ _CreateAddressLookup(CFStringRef name, CFHostInfoType info, void* context, CFStr
 					/* The list holds it now. */
 					CFRelease(host);
 
-					/* Set the client for asynchronous callback. */
+                    // Kick off an internal, asynchronous resolution
+                    // that will nest with the external resolution. It
+                    // is definitionally asynchronous because a
+                    // internal asynchronous client callback is set,
+                    // which may not be the case with the outer
+                    // resolution that triggered this one.
+
+					// Set the asynchronous client callback.
+
 					CFHostSetClient(host, (CFHostClientCallBack)_PrimaryLookupCallBack, &ctxt);
 
-					/* Kick off the resolution.  NULL the client if the resolution can't start. */
+					// Kick off the internal, asynchronous nested
+					// resolution.
+
 					started = CFHostStartInfoResolution(host, _kCFHostMasterAddressLookup, error);
 					if (!started) {
-
 						// It is absolutely imperative that
 						// CFHostStartInfoResolution (or its
 						// info-type-specific helpers) set an error of
