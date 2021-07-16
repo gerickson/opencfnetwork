@@ -334,9 +334,12 @@ static void                     _AresClearOrSetRequestEvents(_CFHostAresRequest 
                                                              uint16_t event,
                                                              Boolean set);
 static _CFHostAresRequest *     _AresCreateRequest(_CFHost *host, CFStreamError *error);
-static void                     _AresFileDescriptorRefCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
+static void                     _AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
 static void                     _AresFreeAddrInfo(struct addrinfo *res);
-static void                     _AresQueryCompletedCallBack(void *arg, int status, int timeouts, struct hostent *hostent);
+static void                     _AresHostByCompletedCallBack(void *arg,
+                                                             int status,
+                                                             int timeouts,
+                                                             struct hostent *hostent);
 static void                     _AresSocketStateCallBack(void *data, ares_socket_t socket_fd, int readable, int writable);
 static int                      _AresStatusMapToAddrInfoError(int ares_status);
 static struct addrinfo * _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error);
@@ -1503,7 +1506,7 @@ _MaybeReenableRequestCallBacks(_CFHostAresRequest *aRequest) {
 }
 
 /* static */ void
-_AresFileDescriptorRefCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info) {
+_AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info) {
     _CFHostAresRequest *             ares_request = (_CFHostAresRequest *)(info);
     CFFileDescriptorNativeDescriptor fd;
     ares_socket_t                    readfd;
@@ -1630,7 +1633,7 @@ _AresSocketStateCallBack(void *data,
         fdref = CFFileDescriptorCreate(kCFAllocatorDefault,
                                        socket_fd,
                                        !kCloseOnInvalidate,
-                                       _AresFileDescriptorRefCallBack,
+                                       _AresSocketDataCallBack,
                                        &fdContext);
 
         if (fdref == NULL) {
@@ -1873,10 +1876,10 @@ _AresAccumulateAddrInfo(_CFHostAresRequest *ares_request, struct addrinfo *ai) {
 }
 
 /* static */ void
-_AresQueryCompletedCallBack(void *arg,
-                            int status,
-                            int timeouts,
-                            struct hostent *hostent) {
+_AresHostByCompletedCallBack(void *arg,
+                             int status,
+                             int timeouts,
+                             struct hostent *hostent) {
     _CFHostAresRequest *ares_request = (_CFHostAresRequest *)(arg);
 
     __CFHostTraceEnterWithFormat("arg %p status %d timeouts %d hostent %p\n",
@@ -1898,6 +1901,9 @@ _AresQueryCompletedCallBack(void *arg,
 
             if (hostent->h_aliases != NULL)
             {
+                int   i;
+                char *current;
+
                 for (i = 0; ((current = hostent->h_aliases[i]) != NULL); i++)
                 {
                     _LogName("alias", current);
@@ -2100,7 +2106,7 @@ _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CF
         ares_gethostbyname(ares_request->_request_channel,
                            ares_request->_request_name,
                            AF_INET,
-                           _AresQueryCompletedCallBack,
+                           _AresHostByCompletedCallBack,
                            ares_request);
     }
 
@@ -2108,7 +2114,7 @@ _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CF
         ares_gethostbyname(ares_request->_request_channel,
                            ares_request->_request_name,
                            AF_INET6,
-                           _AresQueryCompletedCallBack,
+                           _AresHostByCompletedCallBack,
                            ares_request);
     }
 
@@ -2393,15 +2399,15 @@ _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* er
                            ia,
                            ia_len,
                            family,
-                           _AresQueryCompletedCallBack,
+                           _AresHostByCompletedCallBack,
                            ares_request);
     }
 
-    // It is possible, whether on error or whether on cache
-    // resolution, that we will land here without either
+    // It is possible, whether on error or whether on cache or local
+    // file-based resolution, that we will land here without either
     // _AresQueryCompletedCallBack (less likely) or
-    // _AresFileDescriptorRefCallBack (more likely) being called. If
-    // either of those cases is a non-success case, handle clean-up
+    // _AresSocketDataCallBack (more likely) being called. If either
+    // of those cases is a non-success case, handle clean-up
     // appropriately.
 
     if (ares_request->_request_status != ARES_SUCCESS) {
