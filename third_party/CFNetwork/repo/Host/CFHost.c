@@ -333,6 +333,7 @@ static void                     _AresAccumulateAddrInfo(_CFHostAresRequest *ares
 static void                     _AresClearOrSetRequestEvents(_CFHostAresRequest *ares_request,
                                                              uint16_t event,
                                                              Boolean set);
+static _CFHostAresRequest *     _AresCreateRequest(_CFHost *host, CFStreamError *error);
 static void                     _AresFileDescriptorRefCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
 static void                     _AresFreeAddrInfo(struct addrinfo *res);
 static void                     _AresQueryCompletedCallBack(void *arg, int status, int timeouts, struct hostent *hostent);
@@ -2005,6 +2006,35 @@ _AresQueryCompletedCallBack(void *arg,
     __CFHostTraceExit();
 }
 
+/* static */ _CFHostAresRequest *
+_AresCreateRequest(_CFHost *host, CFStreamError *error)
+{
+    _CFHostAresRequest * result = NULL;
+
+    __Require(host != NULL, done);
+    __Require(error != NULL, done);
+
+    __CFHostTraceEnterWithFormat("host %p error %p\n", host, error);
+
+	result = (_CFHostAresRequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFHostAresRequest), 0);
+	__Require_Action(result != NULL,
+					 done,
+					 error->error  = ENOMEM;
+					 error->domain = kCFStreamErrorDomainPOSIX);
+
+    __CFHostMaybeLog("%d: ares_request %p\n", __LINE__, result);
+
+    memset(result, 0, sizeof(_CFHostAresRequest));
+
+    result->_request_error   = error;
+    result->_request_host    = host;
+
+ done:
+    __CFHostTraceExitWithFormat("result %p\n", result);
+
+    return result;
+}
+
 /* static */ CFFileDescriptorRef
 _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
 	const CFAllocatorRef allocator = CFGetAllocator(name);
@@ -2027,20 +2057,12 @@ _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CF
 	buffer = _CFStringToCStringWithError(name, error);
 	__Require(buffer != NULL, done);
 
-	ares_request = (_CFHostAresRequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFHostAresRequest), 0);
+	ares_request = _AresCreateRequest((_CFHost *)context, error);
 	__Require_Action(ares_request != NULL,
 					 done,
-					 error->error  = ENOMEM;
-					 error->domain = kCFStreamErrorDomainPOSIX;
                      CFAllocatorDeallocate(allocator, buffer));
 
-    __CFHostMaybeLog("%d: ares_request %p\n", __LINE__, ares_request);
-
-    memset(ares_request, 0, sizeof(_CFHostAresRequest));
-
     ares_request->_request_name    = (const char *)buffer;
-    ares_request->_request_error   = error;
-    ares_request->_request_host    = (_CFHost *)context;
 
     __CFHostMaybeLog("%d: ares_request (%p)->_request_name %s\n",
                      __LINE__,
@@ -2319,6 +2341,7 @@ _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* er
     const int               family = sa->sa_family;
     const void *            ia;
     int                     ia_len;
+    _CFHost *               host = (_CFHost *)(context);
     struct ares_options     options;
     _CFHostAresRequest *    ares_request = NULL;
     int                     status;
@@ -2327,17 +2350,10 @@ _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* er
 	__CFHostTraceEnterWithFormat("address %p context %p error %p\n",
 							address, context, error);
 
-	ares_request = (_CFHostAresRequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFHostAresRequest), 0);
-	__Require_Action(ares_request != NULL,
-					 done,
-					 error->error  = ENOMEM;
-					 error->domain = kCFStreamErrorDomainPOSIX);
+    ares_request = _AresCreateRequest(host, error);
+	__Require(ares_request != NULL, done);
 
-    memset(ares_request, 0, sizeof(_CFHostAresRequest));
-
-    ares_request->_request_name    = NULL;
-    ares_request->_request_error   = error;
-    ares_request->_request_host    = context;
+    ares_request->_request_name = NULL;
 
     options.sock_state_cb      = _AresSocketStateCallBack;
     options.sock_state_cb_data = ares_request;
