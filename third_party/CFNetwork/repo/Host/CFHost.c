@@ -1951,6 +1951,12 @@ _AresHostByCompletedCallBack(void *arg,
                                                  ares_request->_request_addrinfo,
                                                  ares_request->_request_host,
                                                  _AresFreeAddrInfo);
+
+                    // Release the buffer that was previously allocated
+                    // for the lookup name when the request was made.
+
+                    CFAllocatorDeallocate(kCFAllocatorDefault, (void *)ares_request->_request_name);
+                    ares_request->_request_name = NULL;
                 } else {
                     _CFHost *            host = ares_request->_request_host;
                     CFHostClientCallBack cb   = NULL;
@@ -1977,17 +1983,6 @@ _AresHostByCompletedCallBack(void *arg,
                         __CFSpinLock(&(host->_lock));
                     }
                 }
-
-                if (ares_request->_request_lookup != NULL) {
-                    CFFileDescriptorInvalidate(ares_request->_request_lookup);
-                    CFRelease(ares_request->_request_lookup);
-                    ares_request->_request_lookup = NULL;
-                }
-
-                // Release the buffer that was previously allocated
-                // for the lookup name when the request was made.
-
-                CFAllocatorDeallocate(kCFAllocatorDefault, (void *)ares_request->_request_name);
             }
         }
     } else if (status == ARES_ECANCELLED) {
