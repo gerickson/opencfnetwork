@@ -334,6 +334,7 @@ static void                     _AresClearOrSetRequestEvents(_CFHostAresRequest 
                                                              uint16_t event,
                                                              Boolean set);
 static _CFHostAresRequest *     _AresCreateRequest(_CFHost *host, CFStreamError *error);
+static void                     _AresDestroyRequestAndChannel(_CFHostAresRequest *ares_request);
 static void                     _AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
 static void                     _AresFreeAddrInfo(struct addrinfo *res);
 static void                     _AresHostByCompletedCallBack(void *arg,
@@ -1545,11 +1546,7 @@ _AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, 
     // necessary.
 
     if (ares_request->_request_pending == 0) {
-        ares_destroy(ares_request->_request_channel);
-
-        // Release the request.
-
-        CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
+        _AresDestroyRequestAndChannel(ares_request);
     } else {
         _MaybeReenableRequestCallBacks(ares_request);
     }
@@ -2041,6 +2038,18 @@ _AresCreateRequest(_CFHost *host, CFStreamError *error)
     return result;
 }
 
+/* static */ void
+_AresDestroyRequestAndChannel(_CFHostAresRequest *ares_request) {
+    __Require(ares_request != NULL, done);
+
+    ares_destroy(ares_request->_request_channel);
+
+    CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
+
+ done:
+    return;
+}
+
 /* static */ CFFileDescriptorRef
 _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
 	const CFAllocatorRef allocator = CFGetAllocator(name);
@@ -2413,9 +2422,7 @@ _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* er
     if (ares_request->_request_status != ARES_SUCCESS) {
         _AresStatusMapToStreamError(status, error);
 
-        ares_destroy(ares_request->_request_channel);
-
-        CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
+        _AresDestroyRequestAndChannel(ares_request);
     } else {
         result = ares_request->_request_lookup;
 
@@ -2423,9 +2430,7 @@ _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* er
         // and can destroy the channel and the request.
 
         if (result == NULL) {
-            ares_destroy(ares_request->_request_channel);
-
-            CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
+            _AresDestroyRequestAndChannel(ares_request);
         }
     }
 
