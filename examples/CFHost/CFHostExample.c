@@ -294,6 +294,8 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
     started = StartResolution(aHost, aInfo, *aAsync);
     __Require_Action(started, done, status = -1);
 
+    status = 0;
+
  done:
     // There are two hallmarks of a synchronous versus asynchronous
     // lookup: setting a client callback is one of them, starting and
@@ -307,7 +309,6 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
         __Require_Action(set, done, status = -1);
     }
 
-    status = 0;
 
     return (status);
 }
