@@ -333,8 +333,10 @@ static void                     _AresAccumulateAddrInfo(_CFHostAresRequest *ares
 static void                     _AresClearOrSetRequestEvents(_CFHostAresRequest *ares_request,
                                                              uint16_t event,
                                                              Boolean set);
+static CFTypeRef                _AresCreateNullLookup(void);
 static _CFHostAresRequest *     _AresCreateRequestAndChannel(_CFHost *host, ares_sock_state_cb sock_state_cb, CFStreamError *error);
 static void                     _AresDestroyRequestAndChannel(_CFHostAresRequest *ares_request);
+static Boolean                  _AresIsNullLookup(CFTypeRef lookup);
 static void                     _AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
 static void                     _AresFreeAddrInfo(struct addrinfo *res);
 static void                     _AresHostByCompletedCallBack(void *arg,
@@ -1872,6 +1874,16 @@ _AresAccumulateAddrInfo(_CFHostAresRequest *ares_request, struct addrinfo *ai) {
   __CFHostTraceExit();
 }
 
+/* static */ CFTypeRef
+_AresCreateNullLookup(void) {
+    return (CFTypeRef)kCFNull;
+}
+
+/* static */ Boolean
+_AresIsNullLookup(CFTypeRef lookup) {
+    return CFEqual(lookup, kCFNull);
+}
+
 /* static */ void
 _AresHostByCompletedCallBack(void *arg,
                              int status,
@@ -1932,8 +1944,7 @@ _AresHostByCompletedCallBack(void *arg,
                              ares_request,
                              ares_request->_request_pending);
 
-            if (ares_request->_request_pending > 0)
-            {
+            if (ares_request->_request_pending > 0) {
                 ares_request->_request_pending--;
             }
 
@@ -1944,43 +1955,51 @@ _AresHostByCompletedCallBack(void *arg,
             } else if (ares_request->_request_pending == 0) {
                 __CFHostMaybeLog("There are no more lookup requests pending, cleaning up...\n");
 
-                if (ares_request->_request_name != NULL) {
-                    // Invoke the common, shared getaddrinfo{,_a} callback.
+                if (ares_request->_request_lookup == NULL) {
+                    ares_request->_request_lookup = _AresCreateNullLookup();
+                }
 
-                    _GetAddrInfoCallBackWithFree(_AresStatusMapToAddrInfoError(status),
-                                                 ares_request->_request_addrinfo,
-                                                 ares_request->_request_host,
-                                                 _AresFreeAddrInfo);
+                if (ares_request->_request_lookup != NULL) {
+                    if (ares_request->_request_name != NULL) {
+                        // Invoke the common, shared getaddrinfo{,_a} callback.
 
-                    // Release the buffer that was previously allocated
-                    // for the lookup name when the request was made.
+                        _GetAddrInfoCallBackWithFree(_AresStatusMapToAddrInfoError(status),
+                                                     ares_request->_request_addrinfo,
+                                                     ares_request->_request_host,
+                                                     _AresFreeAddrInfo);
 
-                    CFAllocatorDeallocate(kCFAllocatorDefault, (void *)ares_request->_request_name);
-                    ares_request->_request_name = NULL;
-                } else {
-                    _CFHost *            host = ares_request->_request_host;
-                    CFHostClientCallBack cb   = NULL;
-                    void *               info = NULL;
-                    CFStreamError        error;
+                        // Release the buffer that was previously allocated
+                        // for the lookup name when the request was made.
+                        CFAllocatorDeallocate(kCFAllocatorDefault, (void *)ares_request->_request_name);
+                        ares_request->_request_name = NULL;
+                    } else {
+                        _CFHost *            host = ares_request->_request_host;
+                        CFHostClientCallBack cb   = NULL;
+                        void *               info = NULL;
+                        CFStreamError        error;
 
-                    _GetNameInfoCallBackWithFree_NoLock(_AresStatusMapToAddrInfoError(status),
-                                                        hostent->h_name,
-                                                        NULL,
-                                                        host,
-                                                        &cb,
-                                                        &info,
-                                                        &error,
-                                                        ares_request->_request_host->_lookup != NULL);
+                        _GetNameInfoCallBackWithFree_NoLock(_AresStatusMapToAddrInfoError(status),
+                                                            hostent->h_name,
+                                                            NULL,
+                                                            host,
+                                                            &cb,
+                                                            &info,
+                                                            &error,
+                                                            ares_request->_request_host->_lookup != NULL);
 
-                    // If there is a callback, inform the client of the finish.
-                    if (cb) {
-                        // Unlock the host
-                        __CFSpinUnlock(&(host->_lock));
+                        // If there is a callback, inform the client of the finish.
+                        if (cb) {
+                            // Unlock the host since the call out may
+                            // call back into the object; if the host
+                            // is locked, the call will deadlock.
 
-                        cb((CFHostRef)host, kCFHostNames, &error, info);
+                            __CFSpinUnlock(&(host->_lock));
 
-                        // Lock down the host again
-                        __CFSpinLock(&(host->_lock));
+                            cb((CFHostRef)host, kCFHostNames, &error, info);
+
+                            // Lock down the host again
+                            __CFSpinLock(&(host->_lock));
+                        }
                     }
                 }
             }
@@ -2414,9 +2433,11 @@ _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* er
         result = ares_request->_request_lookup;
 
         // If the result is NULL, then we had a callback-free lookup
-        // and can destroy the channel and the request.
+        // and can destroy the channel and the request. Otherwise, the
+        // request and channel will be deallocated in the socket state
+        // callback.
 
-        if (result == NULL) {
+        if (result == NULL || _AresIsNullLookup(result)) {
             _AresDestroyRequestAndChannel(ares_request);
         }
     }
