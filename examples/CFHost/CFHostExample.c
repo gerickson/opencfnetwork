@@ -225,9 +225,8 @@ HostCallBack(CFHostRef aHost, CFHostInfoType aInfo, const CFStreamError *aError,
 }
 
 static Boolean
-StartResolution(CFHostRef aHost, CFHostInfoType aInfo, Boolean aAsync)
+StartResolution(CFHostRef aHost, CFHostInfoType aInfo, CFStreamError *aError, Boolean aAsync)
 {
-    CFStreamError error = { 0, 0 };
     Boolean       result;
 
     // There are two hallmarks of a synchronous versus asynchronous
@@ -241,7 +240,7 @@ StartResolution(CFHostRef aHost, CFHostInfoType aInfo, Boolean aAsync)
         CFHostScheduleWithRunLoop(aHost, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
     }
 
-    result = CFHostStartInfoResolution(aHost, aInfo, &error);
+    result = CFHostStartInfoResolution(aHost, aInfo, aError);
     __Require(result, done);
 
     // There are two hallmarks of a synchronous versus asynchronous
@@ -276,6 +275,7 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
     CFHostClientContext context = { 0, aAsync, NULL, NULL, NULL };
     Boolean             set;
     Boolean             started;
+    CFStreamError       error  = { 0, 0 };
     int                 status = -1;
 
     type = CFGetTypeID(aHost);
@@ -295,7 +295,7 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
 
     GetAndLogAddressesAndNames(aHost, FALSE);
 
-    started = StartResolution(aHost, aInfo, *aAsync);
+    started = StartResolution(aHost, aInfo, &error, *aAsync);
     __Require_Action(started, done, status = -1);
 
     status = 0;
@@ -313,6 +313,12 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
         __Require_Action(set, done, status = -1);
     }
 
+    if (status != 0) {
+        if (error.error != 0) {
+            __CFHostExampleLog("Resolution failed with error %d.%ld\n",
+                               error.error, error.domain);
+        }
+    }
 
     return (status);
 }
