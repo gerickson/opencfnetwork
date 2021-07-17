@@ -215,6 +215,10 @@ HostCallBack(CFHostRef aHost, CFHostInfoType aInfo, const CFStreamError *aError,
     } else {
         __CFHostExampleLog("Resolution failed with error %d.%ld\n",
                            aError->error, aError->domain);
+
+        if (*async) {
+            CFRunLoopStop(CFRunLoopGetCurrent());
+        }
     }
 
     CFHostCancelInfoResolution(aHost, aInfo);
