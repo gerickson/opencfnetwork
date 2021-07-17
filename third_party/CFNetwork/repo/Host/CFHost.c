@@ -343,6 +343,11 @@ static void                     _AresHostByCompletedCallBack(void *arg,
                                                              int status,
                                                              int timeouts,
                                                              struct hostent *hostent);
+static void                     _AresNameInfoCompletedCallBack(void *arg,
+                                                               int status,
+                                                               int timeouts,
+                                                               char *node,
+                                                               char *service);
 static void                     _AresSocketStateCallBack(void *data, ares_socket_t socket_fd, int readable, int writable);
 static int                      _AresStatusMapToAddrInfoError(int ares_status);
 static struct addrinfo * _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error);
@@ -1174,7 +1179,7 @@ _CreateAddressLookupRequest(const char *name, CFHostInfoType info, int signal, C
 	__Require_Action(name != NULL, done, result = -EINVAL);
 
 	memset(&sigev, 0, sizeof(sigev));
-  
+
 	gai_request = (_CFHostGAIARequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFHostGAIARequest), 0);
 	__Require_Action(gai_request != NULL,
 					 done,
@@ -1281,7 +1286,7 @@ _CreateAddressLookupSource_GetAddrInfo_A(int signal, CFTypeRef context, CFStream
     CFFileDescriptorContext fdrefContext = { 0, (void *)context, NULL, NULL, NULL };
 	CFFileDescriptorRef     result = NULL;
 
-	__CFHostTraceEnterWithFormat("signal %d context %p error %p\n", signal, context, error);	
+	__CFHostTraceEnterWithFormat("signal %d context %p error %p\n", signal, context, error);
 
 	sigfd = _CreateSignalFd(signal, error);
 	__Require(sigfd != -1, done);
@@ -1689,7 +1694,7 @@ _LogAddress(int aFamily, const char *aData) {
         break;
 
     }
-    
+
     if ((addr != NULL) && (addrlen > 0)) {
         result = ares_inet_ntop(aFamily, addr, buffer, buflen);
 
@@ -1949,17 +1954,20 @@ _AresHostByCompletedCallBack(void *arg,
             }
 
             if (ares_request->_request_pending > 0) {
-                __CFHostMaybeLog("There are still lookup requests pending...\n");
+                __CFHostMaybeLog("%s: There are still lookup requests pending...\n", __func__);
 
                 _MaybeReenableRequestCallBacks(ares_request);
             } else if (ares_request->_request_pending == 0) {
-                __CFHostMaybeLog("There are no more lookup requests pending, cleaning up...\n");
+                __CFHostMaybeLog("%s: There are no more lookup requests pending, resolving lookup and cleaning up...\n", __func__);
 
                 if (ares_request->_request_lookup == NULL) {
+                    __CFHostMaybeLog("%s: There was NO run loop source, faking one.\n", __func__);
                     ares_request->_request_lookup = _AresCreateNullLookup();
                 }
 
                 if (ares_request->_request_lookup != NULL) {
+                    __CFHostMaybeLog("%s: There was a run loop source, we can definitely resolve and clean up NOW.\n", __func__);
+
                     if (ares_request->_request_name != NULL) {
                         // Invoke the common, shared getaddrinfo{,_a} callback.
 
@@ -1972,15 +1980,77 @@ _AresHostByCompletedCallBack(void *arg,
                         // for the lookup name when the request was made.
                         CFAllocatorDeallocate(kCFAllocatorDefault, (void *)ares_request->_request_name);
                         ares_request->_request_name = NULL;
-                    } else {
+                    }
+                }
+            }
+        }
+    } else if (status == ARES_ECANCELLED) {
+        __CFHostMaybeLog("%d: ares_request %p is being cancelled\n",
+                         __LINE__, ares_request);
+        __CFHostMaybeLog("%d: ares_request (%p)->_request_pending %zu\n",
+                         __LINE__,
+                         ares_request,
+                         ares_request->_request_pending);
+    } else {
+        if (ares_request->_request_pending > 0)
+        {
+            ares_request->_request_pending--;
+        }
+    }
+
+    ares_request->_request_status = status;
+
+    __CFHostTraceExit();
+}
+
+/* static */ void
+_AresNameInfoCompletedCallBack(void *arg,
+                               int status,
+                               int timeouts,
+                               char *node,
+                               char *service) {
+    _CFHostAresRequest *ares_request = (_CFHostAresRequest *)(arg);
+
+    __CFHostTraceEnterWithFormat("arg %p status %d timeouts %d node %p (%s) service %p (%s)\n",
+                                 arg, status, timeouts, node, node, service, service);
+
+    __CFHostMaybeLog("%d: ares_request %p\n", __LINE__, ares_request);
+
+    if (status == ARES_SUCCESS) {
+        if ((node != NULL) || (service != NULL)) {
+            __CFHostMaybeLog("%d: ares_request (%p)->_request_pending %zu\n",
+                             __LINE__,
+                             ares_request,
+                             ares_request->_request_pending);
+
+            if (ares_request->_request_pending > 0) {
+                ares_request->_request_pending--;
+            }
+
+            if (ares_request->_request_pending > 0) {
+                __CFHostMaybeLog("%s: There are still lookup requests pending...\n", __func__);
+
+                _MaybeReenableRequestCallBacks(ares_request);
+            } else if (ares_request->_request_pending == 0) {
+                __CFHostMaybeLog("%s: There are no more lookup requests pending, resolving lookup and cleaning up...\n", __func__);
+
+                if (ares_request->_request_lookup == NULL) {
+                    __CFHostMaybeLog("%s: There was NO run loop source, faking one.\n", __func__);
+                    ares_request->_request_lookup = _AresCreateNullLookup();
+                }
+
+                if (ares_request->_request_lookup != NULL) {
+                    __CFHostMaybeLog("%s: There was a run loop source, we can definitely resolve and clean up NOW.\n", __func__);
+
+                    if (ares_request->_request_name == NULL) {
                         _CFHost *            host = ares_request->_request_host;
                         CFHostClientCallBack cb   = NULL;
                         void *               info = NULL;
                         CFStreamError        error;
 
                         _GetNameInfoCallBackWithFree_NoLock(_AresStatusMapToAddrInfoError(status),
-                                                            hostent->h_name,
-                                                            NULL,
+                                                            node,
+                                                            service,
                                                             host,
                                                             &cb,
                                                             &info,
@@ -2371,13 +2441,11 @@ _CreateNameLookup_Mach(CFDataRef address, void* context, CFStreamError* error) {
 #if HAVE_ARES_INIT && 1
 /* static */ CFFileDescriptorRef
 _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* error) {
-    const struct sockaddr * sa = (const struct sockaddr *)CFDataGetBytePtr(address);
-    const int               family = sa->sa_family;
-    const void *            ia;
-    int                     ia_len;
-    _CFHost *               host = (_CFHost *)(context);
+    const struct sockaddr * sa           = (const struct sockaddr *)CFDataGetBytePtr(address);
+    const ares_socklen_t    sa_len       = CFDataGetLength(address);
+    _CFHost *               host         = (_CFHost *)(context);
     _CFHostAresRequest *    ares_request = NULL;
-    CFFileDescriptorRef     result = NULL;
+    CFFileDescriptorRef     result       = NULL;
 
 	__CFHostTraceEnterWithFormat("address %p context %p error %p\n",
 							address, context, error);
@@ -2389,33 +2457,15 @@ _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* er
 
     ares_request->_request_pending = 1;
 
-    switch (family) {
+    if (sa_len > 0) {
+        const int flags = (ARES_NI_NAMEREQD);
 
-    case AF_INET:
-        ia = &((struct sockaddr_in *)(sa))->sin_addr;
-        ia_len = sizeof(struct in_addr);
-        break;
-
-    case AF_INET6:
-        ia = &((struct sockaddr_in6 *)(sa))->sin6_addr;
-        ia_len = sizeof(struct in6_addr);
-        break;
-
-    default:
-        ia = NULL;
-        ia_len = 0;
-        ares_request->_request_status = ARES_EBADFAMILY;
-        break;
-
-    }
-
-    if ((ia != NULL) && (ia_len > 0)) {
-        ares_gethostbyaddr(ares_request->_request_channel,
-                           ia,
-                           ia_len,
-                           family,
-                           _AresHostByCompletedCallBack,
-                           ares_request);
+        ares_getnameinfo(ares_request->_request_channel,
+                         sa,
+                         sa_len,
+                         flags,
+                         _AresNameInfoCompletedCallBack,
+                         ares_request);
     }
 
     // It is possible, whether on error or whether on cache or local
@@ -2654,13 +2704,13 @@ _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *c
 
 			else {
 				const struct addrinfo* i;
-				
+
 				// Loop through all of the addresses saving them in the array.
 				for (i = res; i; i = i->ai_next) {
                     const int family = i->ai_addr->sa_family;
 					CFDataRef data   = NULL;
 					CFIndex   length = 0;
-					
+
 					// Bypass any address families that are not understood by CFSocketStream
 					if (family != AF_INET && family != AF_INET6)
 						continue;
