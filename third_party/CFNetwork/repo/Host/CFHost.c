@@ -2420,7 +2420,7 @@ _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* er
     // appropriately.
 
     if (ares_request->_request_status != ARES_SUCCESS) {
-        _AresStatusMapToStreamError(status, error);
+        _AresStatusMapToStreamError(ares_request->_request_status, error);
 
         _AresDestroyRequestAndChannel(ares_request);
     } else {
