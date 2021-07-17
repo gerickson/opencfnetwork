@@ -353,6 +353,7 @@ static int                      _AresStatusMapToAddrInfoError(int ares_status);
 static struct addrinfo * _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error);
 static void                     _AresStatusMapToStreamError(int status, CFStreamError *error);
 static void                     _CFHostInitializeAres(void);
+static void                     _CopyHostentAddrToAddrInfo(int family, struct addrinfo *ai, const char *data);
 static CFFileDescriptorRef      _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error);
 static CFFileDescriptorRef      _CreatePrimaryAddressLookup_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
 #if LOG_CFHOST
@@ -1759,14 +1760,38 @@ _AresFreeAddrInfo(struct addrinfo *res) {
     }
 }
 
+/* static */ void
+_CopyHostentAddrToAddrInfo(int family, struct addrinfo *ai, const char *data) {
+    struct sockaddr_in *  saddr;
+    struct sockaddr_in6 * saddr6;
+
+    switch (family) {
+
+    case AF_INET:
+        saddr = (struct sockaddr_in *)ai->ai_addr;
+
+        memcpy(&saddr->sin_addr, data, sizeof(struct in_addr));
+        saddr->sin_family = family;
+        break;
+
+    case AF_INET6:
+        saddr6 = (struct sockaddr_in6 *)ai->ai_addr;
+
+        memcpy(&saddr6->sin6_addr, data, sizeof(struct in6_addr));
+        saddr6->sin6_family = family;
+        break;
+
+    }
+}
+
 /* static */ struct addrinfo *
 _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
     int               i;
     int               status   = 0;
-    char *            current  = NULL;
-    struct addrinfo * first    = NULL;
-    struct addrinfo * previous = NULL;
+    const char *      data     = NULL;
     struct addrinfo * result   = NULL;
+    struct addrinfo * previous = NULL;
+    struct addrinfo * current  = NULL;
 
     __Require_Action(hostent != NULL, map_status, status = EINVAL);
     __Require_Action(hostent->h_name != NULL, map_status, status = EINVAL);
@@ -1776,15 +1801,13 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
     // Loop over each hostent address and create and map it into an
     // addrinfo.
 
-    for (i = 0; ((current = hostent->h_addr_list[i]) != NULL); i++)
+    for (i = 0; ((data = hostent->h_addr_list[i]) != NULL); i++)
     {
-        const char kNull = '\0';
-        const int family = hostent->h_addrtype;
+        const char   kNull         = '\0';
+        const int    family        = hostent->h_addrtype;
         const size_t canonname_len = strlen(hostent->h_name) + sizeof(kNull);
-        size_t addr_size;
-        size_t total_size;
-        struct sockaddr_in *saddr;
-        struct sockaddr_in6 *saddr6;
+        size_t       addr_size;
+        size_t       total_size;
 
         // Determine how large the socket address data at the tail of
         // the allocated addrinfo block should be.
@@ -1807,10 +1830,10 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
 
         total_size = sizeof(struct addrinfo) + addr_size + canonname_len;
 
-        result = CFAllocatorAllocate(kCFAllocatorDefault, total_size, 0);
-        __Require_Action(result != NULL, map_status, status = ENOMEM);
+        current = CFAllocatorAllocate(kCFAllocatorDefault, total_size, 0);
+        __Require_Action(current != NULL, map_status, status = ENOMEM);
 
-        memset(result, 0, total_size);
+        memset(current, 0, total_size);
 
         // Set the addrinfo address pointer to the
         // trailing-but-inlined socket address and canonical name
@@ -1818,45 +1841,29 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
         // alignment issues with that structure that might otherwise
         // result from following an arbitrarily-sized canonical name.
 
-        result->ai_addr      = (struct sockaddr *)((uint8_t *)result + sizeof(struct addrinfo));
-        result->ai_canonname = (char *)((uint8_t *)result->ai_addr + addr_size);
+        current->ai_addr      = (struct sockaddr *)((uint8_t *)current + sizeof(struct addrinfo));
+        current->ai_canonname = (char *)((uint8_t *)current->ai_addr + addr_size);
 
-        result->ai_family   = family;
-        result->ai_socktype = SOCK_STREAM;
-        result->ai_addrlen  = addr_size;
+        current->ai_family   = family;
+        current->ai_socktype = SOCK_STREAM;
+        current->ai_addrlen  = addr_size;
 
-        memcpy(result->ai_canonname, hostent->h_name, canonname_len);
+        memcpy(current->ai_canonname, hostent->h_name, canonname_len);
 
         // Copy the actual address data from the current hostent
         // address to the addrinfo socket address.
 
-        switch (family) {
-
-        case AF_INET:
-            saddr = (struct sockaddr_in *)result->ai_addr;
-
-            memcpy(&saddr->sin_addr, current, sizeof(struct in_addr));
-            saddr->sin_family = family;
-            break;
-
-        case AF_INET6:
-            saddr6 = (struct sockaddr_in6 *)result->ai_addr;
-
-            memcpy(&saddr6->sin6_addr, current, sizeof(struct in6_addr));
-            saddr6->sin6_family = family;
-            break;
-
-        }
+        _CopyHostentAddrToAddrInfo(family, current, data);
 
         // Chain up the addrinfo data, as created.
 
-        if (first == NULL)
-            first = result;
+        if (result == NULL)
+            result = current;
 
         if (previous != NULL)
-            previous->ai_next = result;
+            previous->ai_next = current;
 
-        previous = result;
+        previous = current;
     }
 
 map_status:
@@ -1864,14 +1871,14 @@ map_status:
         error->error = status;
         error->domain = kCFStreamErrorDomainPOSIX;
 
-        if (first != NULL) {
-            _AresFreeAddrInfo(first);
-            first = NULL;
+        if (result != NULL) {
+            _AresFreeAddrInfo(result);
+            result = NULL;
         }
     }
 
 done:
-    return first;
+    return result;
 }
 
 /* static */ void
