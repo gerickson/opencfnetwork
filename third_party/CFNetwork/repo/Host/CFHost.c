@@ -333,7 +333,7 @@ static void                     _AresAccumulateAddrInfo(_CFHostAresRequest *ares
 static void                     _AresClearOrSetRequestEvents(_CFHostAresRequest *ares_request,
                                                              uint16_t event,
                                                              Boolean set);
-static _CFHostAresRequest *     _AresCreateRequest(_CFHost *host, CFStreamError *error);
+static _CFHostAresRequest *     _AresCreateRequestAndChannel(_CFHost *host, ares_sock_state_cb sock_state_cb, CFStreamError *error);
 static void                     _AresDestroyRequestAndChannel(_CFHostAresRequest *ares_request);
 static void                     _AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
 static void                     _AresFreeAddrInfo(struct addrinfo *res);
@@ -2010,14 +2010,19 @@ _AresHostByCompletedCallBack(void *arg,
 }
 
 /* static */ _CFHostAresRequest *
-_AresCreateRequest(_CFHost *host, CFStreamError *error)
-{
+_AresCreateRequestAndChannel(_CFHost *host, ares_sock_state_cb sock_state_cb, CFStreamError *error) {
+    const int            optmask = ARES_OPT_SOCK_STATE_CB;
+    struct ares_options  options;
+    int                  status;
     _CFHostAresRequest * result = NULL;
 
     __Require(host != NULL, done);
+    __Require(sock_state_cb != NULL, done);
     __Require(error != NULL, done);
 
     __CFHostTraceEnterWithFormat("host %p error %p\n", host, error);
+
+    // Allocate the request object.
 
 	result = (_CFHostAresRequest *)CFAllocatorAllocate(kCFAllocatorDefault, sizeof(_CFHostAresRequest), 0);
 	__Require_Action(result != NULL,
@@ -2028,6 +2033,20 @@ _AresCreateRequest(_CFHost *host, CFStreamError *error)
     __CFHostMaybeLog("%d: ares_request %p\n", __LINE__, result);
 
     memset(result, 0, sizeof(_CFHostAresRequest));
+
+    // Initialize the c-ares lookup request channel with the socket
+    // state callback option.
+
+    options.sock_state_cb      = sock_state_cb;
+    options.sock_state_cb_data = result;
+
+    status = ares_init_options(&result->_request_channel,
+                               &options,
+                               optmask);
+    __Require_Action(status == ARES_SUCCESS,
+                     done,
+                     _AresStatusMapToStreamError(status, error);
+                     CFAllocatorDeallocate(kCFAllocatorDefault, result));
 
     result->_request_error   = error;
     result->_request_host    = host;
@@ -2053,11 +2072,8 @@ _AresDestroyRequestAndChannel(_CFHostAresRequest *ares_request) {
 /* static */ CFFileDescriptorRef
 _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
 	const CFAllocatorRef allocator = CFGetAllocator(name);
-    const int            optmask = ARES_OPT_SOCK_STATE_CB;
 	UInt8*               buffer;
-    struct ares_options  options;
     _CFHostAresRequest * ares_request = NULL;
-    int                  status;
     Boolean              ipv4only = FALSE;
     Boolean              ipv6only = FALSE;
     CFFileDescriptorRef  result = NULL;
@@ -2072,7 +2088,9 @@ _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CF
 	buffer = _CFStringToCStringWithError(name, error);
 	__Require(buffer != NULL, done);
 
-	ares_request = _AresCreateRequest((_CFHost *)context, error);
+	ares_request = _AresCreateRequestAndChannel((_CFHost *)context,
+                                                _AresSocketStateCallBack,
+                                                error);
 	__Require_Action(ares_request != NULL,
 					 done,
                      CFAllocatorDeallocate(allocator, buffer));
@@ -2083,18 +2101,6 @@ _CreatePrimaryAddressLookup_Linux_Ares(CFStringRef name, CFHostInfoType info, CF
                      __LINE__,
                      ares_request,
                      ares_request->_request_name);
-
-    options.sock_state_cb      = _AresSocketStateCallBack;
-    options.sock_state_cb_data = ares_request;
-
-    status = ares_init_options(&ares_request->_request_channel,
-                               &options,
-                               optmask);
-    __Require_Action(status == ARES_SUCCESS,
-                     done,
-                     _AresStatusMapToStreamError(status, error);
-                     CFAllocatorDeallocate(kCFAllocatorDefault, ares_request);
-                     CFAllocatorDeallocate(allocator, buffer));
 
 	if (info == _kCFHostIPv4Addresses) {
         ipv4only = TRUE;
@@ -2351,35 +2357,21 @@ _CreateNameLookup_Mach(CFDataRef address, void* context, CFStreamError* error) {
 #if HAVE_ARES_INIT && 1
 /* static */ CFFileDescriptorRef
 _CreateNameLookup_Linux_Ares(CFDataRef address, void* context, CFStreamError* error) {
-    const int               optmask = ARES_OPT_SOCK_STATE_CB;
     const struct sockaddr * sa = (const struct sockaddr *)CFDataGetBytePtr(address);
     const int               family = sa->sa_family;
     const void *            ia;
     int                     ia_len;
     _CFHost *               host = (_CFHost *)(context);
-    struct ares_options     options;
     _CFHostAresRequest *    ares_request = NULL;
-    int                     status;
     CFFileDescriptorRef     result = NULL;
 
 	__CFHostTraceEnterWithFormat("address %p context %p error %p\n",
 							address, context, error);
 
-    ares_request = _AresCreateRequest(host, error);
+    ares_request = _AresCreateRequestAndChannel(host,
+                                                _AresSocketStateCallBack,
+                                                error);
 	__Require(ares_request != NULL, done);
-
-    ares_request->_request_name = NULL;
-
-    options.sock_state_cb      = _AresSocketStateCallBack;
-    options.sock_state_cb_data = ares_request;
-
-    status = ares_init_options(&ares_request->_request_channel,
-                               &options,
-                               optmask);
-    __Require_Action(status == ARES_SUCCESS,
-                     done,
-                     _AresStatusMapToStreamError(status, error);
-                     CFAllocatorDeallocate(kCFAllocatorDefault, ares_request));
 
     ares_request->_request_pending = 1;
 
