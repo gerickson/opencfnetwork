@@ -295,8 +295,8 @@ static void                     _ExpireCacheEntries(void);
 static void                     _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt);
 #endif
 static void                     _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *ctxt, FreeAddrInfoCallBack freeaddrinfo_cb);
-static void                     _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean lookup);
-static void                     _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, _CFHost * host, CFHostClientCallBack *cb, void **info, CFStreamError *error, Boolean lookup);
+static void                     _GetNameInfoCallBackWithFreeAndWithShouldLock(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean should_lock);
+static void                     _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, _CFHost * host, CFHostClientCallBack *cb, void **info, CFStreamError *error);
 static void                     _HandleGetAddrInfoStatus(int eai_status, CFStreamError* error, Boolean intuitStatus);
 static _CFHost*                 _HostCreate(CFAllocatorRef allocator);
 static void                     _HostDestroy(_CFHost* host);
@@ -2069,13 +2069,57 @@ _AresNameInfoCompletedCallBack(void *arg,
         }
     }
 
+    // With c-ares, we can get to this lookup conclusion point via one
+    // of two paths. First, on a cache or local file lookup or on an
+    // error path, we can arrive here without going through a socket
+    // state and subsequent data event, which means we are still in
+    // the context of a 'CFHostStartInfoResolution' down call. Second,
+    // on a DNS server lookup, we can arrive here via a socket state
+    // and subsequent data event, which means we are getting scheduled
+    // and down called via the run loop dispatch.
+    //
+    // In the first case, the host object is locked and any call into
+    // _GetNameinfoCallBackWithFree would deadlock, based on the Mach
+    // legacy code base. In the second case, the host object is
+    // unlocked and any such call will not deadlock.
+    //
+    // Consequently, we need to handle these two cases distinctly and
+    // with care. The distinguishing factor will be that the first
+    // case uses the special null lookup and should NOT lock; whereas,
+    // the second case does not and SHOULD lock.
+    //
+    // The _GetNameinfoCallBackWithFree has been reworked with an
+    // expanded API and renamed
+    // _GetNameInfoCallBackWithFreeAndWithShouldLock to take not only
+    // an optional resource deallocation callback but also a Boolean
+    // to indicate whether the host object should be locked within the
+    // function.
+    //
+    // The other nuance we need to deal with in the first case is that
+    // normally host->_lookup will not get assigned until the call to
+    // _CreateNameLookup unwinds in _CreateLookup_NoLock. However, the
+    // down call into _GetNameInfoCallBackWithFreeAndWithShouldLock
+    // (from the Mach legacy code base) assumes host->_lookup has
+    // already been assigned. We will have to manually assign it in
+    // that case.
+
     if (ares_request->_request_pending == 0) {
-        _GetNameInfoCallBackWithFree(_AresStatusMapToAddrInfoError(status),
-                                     node,
-                                     service,
-                                     ares_request->_request_host,
-                                     NULL,
-                                     ares_request->_request_host->_lookup != NULL);
+        const int            eai_status  = _AresStatusMapToAddrInfoError(status);
+        const Boolean        is_null     = _AresIsNullLookup(ares_request->_request_lookup);
+        const Boolean        should_lock = !is_null;
+        _CFHost *            host        = ares_request->_request_host;
+        FreeNameInfoCallBack free_cb     = NULL;
+
+        if (is_null) {
+            ares_request->_request_host->_lookup = ares_request->_request_lookup;
+        }
+
+        _GetNameInfoCallBackWithFreeAndWithShouldLock(eai_status,
+                                                      node,
+                                                      service,
+                                                      host,
+                                                      free_cb,
+                                                      should_lock);
     }
 
     if (ares_request->_request_status != ARES_SUCCESS) {
@@ -2799,7 +2843,7 @@ _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* 
 #endif /* defined(__MACH__) */
 
 /* static */ void
-_GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, _CFHost * host, CFHostClientCallBack *cb, void **info, CFStreamError *error, Boolean lookup) {
+_GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, _CFHost * host, CFHostClientCallBack *cb, void **info, CFStreamError *error) {
     __Require(hostname != NULL, done);
     __Require(host != NULL, done);
     __Require(cb != NULL, done);
@@ -2878,7 +2922,7 @@ _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, 
 }
 
 /* static */ void
-_GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean lookup) {
+_GetNameInfoCallBackWithFreeAndWithShouldLock(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean should_lock) {
 	_CFHost *            host = (_CFHost*)ctxt;
 	CFHostClientCallBack cb   = NULL;
 	void *               info = NULL;
@@ -2888,8 +2932,11 @@ _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* c
 	// but definitely before the callback.
 	CFRetain((CFHostRef)host);
 
-	// Lock the host
-	__CFSpinLock(&host->_lock);
+	// Lock the host, if requested.
+
+    if (should_lock) {
+        __CFSpinLock(&host->_lock);
+    }
 
     _GetNameInfoCallBackWithFree_NoLock(eai_status,
                                         hostname,
@@ -2897,20 +2944,39 @@ _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* c
                                         ctxt,
                                         &cb,
                                         &info,
-                                        &error,
-                                        lookup);
+                                        &error);
 
-	// Unlock the host so the callback can be made safely.
-	__CFSpinUnlock(&host->_lock);
+	// Unlock the host, if previously-requested to be locked, so the
+	// callback can be made safely.
+
+    if (should_lock) {
+        __CFSpinUnlock(&host->_lock);
+    }
 
 	// Release the results if there were any.
     if (freenameinfo_cb) {
         freenameinfo_cb(hostname, serv);
     }
 
+    // Conversely, if no locking was requested, then the host is
+    // already locked. Unlock it before the call out to the client
+    // which may call back into public API functions which WILL lock
+    // and, as a result, WILL deadlock if we call out with the host
+    // locked.
+
+    if (!should_lock) {
+        __CFSpinUnlock(&host->_lock);
+    }
+
 	// If there is a callback, inform the client of the finish.
 	if (cb)
 		cb((CFHostRef)host, kCFHostNames, &error, info);
+
+    // Restore the host lock state, as appropriate and requested.
+
+    if (!should_lock) {
+        __CFSpinLock(&host->_lock);
+    }
 
 	// Go ahead and release now that the callback is done.
 	CFRelease((CFHostRef)host);
@@ -2925,7 +2991,10 @@ _FreeNameInfoCallBack_Mach(char *hostname, char *serv) {
 
 /* static */ void
 _GetNameInfoCallBack(int eai_status, char *hostname, char *serv, void* ctxt) {
-    _GetNameInfoCallBackWithFree(eai_status, hostname, serv, ctxt, _FreeNameInfoCallBack_Mach, TRUE);
+    static const Boolean should_lock = TRUE;
+    FreeNameInfoCallBack free_cb     = _FreeNameInfoCallBack_Mach;
+
+    _GetNameInfoCallBackWithFreeAndWithShouldLock(eai_status, hostname, serv, ctxt, free_cb, should_lock);
 }
 
 /* static */ void
