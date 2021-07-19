@@ -41,8 +41,10 @@
 #include <CFNetwork/CFNetwork.h>
 #include <CoreFoundation/CoreFoundation.h>
 
+#define USE_LOCAL_SCOPE_LOOKUPS      1
+
 #if !defined(LOG_CFHOSTEXAMPLE)
-#define LOG_CFHOSTEXAMPLE 0
+#define LOG_CFHOSTEXAMPLE            0
 #endif
 
 #define __CFHostExampleLog(format, ...)       do { fprintf(stderr, format, ##__VA_ARGS__); fflush(stderr); } while (0)
@@ -64,6 +66,20 @@
     __CFHostExampleTraceEnterWithFormat("\n")
 #define __CFHostExampleTraceExit()                                     \
     __CFHostExampleTraceExitWithFormat("\n")
+
+typedef struct {
+    const char * mLookupName;
+    const char * mLookupIPv4Address;
+    const char * mLookupIPv6Address;
+} _CFHostExampleLookups;
+
+#if USE_LOCAL_SCOPE_LOOKUPS
+static const _CFHostExampleLookups sLocalScopeLookups = {
+    "localhost",
+    "127.0.0.1",
+    "::1"
+};
+#endif // USE_LOCAL_SCOPE_LOOKUPS
 
 static void
 LogResolutionStatus(Boolean aResolved, const char *aWhat)
@@ -322,19 +338,21 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
 }
 
 static int
-DemonstrateHostByName(Boolean *aAsync)
+DemonstrateHostByName(const char *name, Boolean *aAsync)
 {
-    CFStringRef         name = CFSTR("localhost");
-    const CFIndex       buflen = MAXHOSTNAMELEN;
-    char                buffer[MAXHOSTNAMELEN];
-    Boolean             converted = CFStringGetCString(name, buffer, buflen, kCFStringEncodingASCII);
+    CFStringRef         string = NULL;
     CFHostRef           host = NULL;
     int                 status = -1;
 
-    __CFHostExampleLog("By name '%s' (DNS)...\n", converted ? buffer : NULL);
+    __CFHostExampleLog("By name '%s' (DNS)...\n", name);
 
-    host = CFHostCreateWithName(kCFAllocatorDefault, name);
-    __Require_Action(host != NULL, done, status = -1);
+    string = CFStringCreateWithCString(kCFAllocatorDefault,
+                                       name,
+                                       kCFStringEncodingUTF8);
+    __Require_Action(string != NULL, done, status = -ENOMEM);
+
+    host = CFHostCreateWithName(kCFAllocatorDefault, string);
+    __Require_Action(host != NULL, done, status = -ENOMEM);
 
     status = DemonstrateHostCommon(host, kCFHostAddresses, aAsync);
     __Require(status == 0, done);
@@ -407,9 +425,8 @@ DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, si
 }
 
 static int
-DemonstrateHostByAddressIPv4(Boolean *aAsync)
+DemonstrateHostByAddressIPv4(const char *aAddressString, Boolean *aAsync)
 {
-    const char * const  addressString = "127.0.0.1";
     struct sockaddr_in  address;
     int                 status = -1;
 
@@ -417,7 +434,7 @@ DemonstrateHostByAddressIPv4(Boolean *aAsync)
 
     address.sin_family = AF_INET;
 
-    status = DemonstrateHostByAddress(addressString,
+    status = DemonstrateHostByAddress(aAddressString,
                                       (struct sockaddr *)&address,
                                       sizeof (struct sockaddr_in),
                                       aAsync);
@@ -426,9 +443,8 @@ DemonstrateHostByAddressIPv4(Boolean *aAsync)
 }
 
 static int
-DemonstrateHostByAddressIPv6(Boolean *aAsync)
+DemonstrateHostByAddressIPv6(const char *aAddressString, Boolean *aAsync)
 {
-    const char * const  addressString = "::1";
     struct sockaddr_in6 address;
     int                 status = -1;
 
@@ -436,7 +452,7 @@ DemonstrateHostByAddressIPv6(Boolean *aAsync)
 
     address.sin6_family = AF_INET6;
 
-    status = DemonstrateHostByAddress(addressString,
+    status = DemonstrateHostByAddress(aAddressString,
                                       (struct sockaddr *)&address,
                                       sizeof (struct sockaddr_in6),
                                       aAsync);
@@ -445,21 +461,35 @@ DemonstrateHostByAddressIPv6(Boolean *aAsync)
 }
 
 static int
-DemonstrateHost(Boolean *aAsync)
+DemonstrateHost(const _CFHostExampleLookups *lookups, Boolean *aAsync)
 {
     int result;
 
-    result = DemonstrateHostByName(aAsync);
+    result = DemonstrateHostByName(lookups->mLookupName, aAsync);
     __Require(result == 0, done);
 
-    result = DemonstrateHostByAddressIPv4(aAsync);
+    result = DemonstrateHostByAddressIPv4(lookups->mLookupIPv4Address, aAsync);
     __Require(result == 0, done);
 
-    result = DemonstrateHostByAddressIPv6(aAsync);
+    result = DemonstrateHostByAddressIPv6(lookups->mLookupIPv6Address, aAsync);
     __Require(result == 0, done);
 
  done:
     return (result);
+}
+
+static const _CFHostExampleLookups *
+GetLookups(void)
+{
+    const _CFHostExampleLookups * lookups;
+
+#if USE_LOCAL_SCOPE_LOOKUPS
+    lookups = &sLocalScopeLookups;
+#else
+#error "Set USE_LOCAL_SCOPE_LOOKUPS to one (1)."
+#endif
+
+    return (lookups);
 }
 
 int
@@ -474,7 +504,7 @@ main(void)
 
     async = FALSE;
 
-    status = DemonstrateHost(&async);
+    status = DemonstrateHost(GetLookups(), &async);
     __Require(status == 0, done);
 
     // Asynchronous (non-blocking)
@@ -483,7 +513,7 @@ main(void)
 
     async = TRUE;
 
-    status = DemonstrateHost(&async);
+    status = DemonstrateHost(GetLookups(), &async);
     __Require(status == 0, done);
 
  done:
