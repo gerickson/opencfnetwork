@@ -54,8 +54,6 @@
 #define __CFHostExampleMaybeLog(format, ...)
 #endif
 
-#define __CFHostExampleMaybeTrace(dir, name)                           \
-    __CFHostExampleMaybeLog(dir " %s\n", name)
 #define __CFHostExampleMaybeTraceWithFormat(dir, name, format, ...)    \
     __CFHostExampleMaybeLog(dir " %s" format, name, ##__VA_ARGS__)
 #define __CFHostExampleTraceEnterWithFormat(format, ...)               \
