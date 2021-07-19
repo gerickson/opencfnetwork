@@ -41,6 +41,9 @@
 #include <CFNetwork/CFNetwork.h>
 #include <CoreFoundation/CoreFoundation.h>
 
+#define DEMONSTRATE_CFHOST_SYNC      1
+#define DEMONSTRATE_CFHOST_ASYNC     1
+
 #define USE_LOCAL_SCOPE_LOOKUPS      1
 #define USE_GLOBAL_SCOPE_LOOKUPS     !USE_LOCAL_SCOPE_LOOKUPS
 
@@ -511,19 +514,23 @@ main(void)
     Boolean async;
     int     status;
 
+#if DEMONSTRATE_CFHOST_SYNC
     // Synchronous (blocking)
 
     async = FALSE;
 
     status = DemonstrateHost(GetLookups(), &async);
     __Require(status == 0, done);
+#endif // DEMONSTRATE_CFHOST_SYNC
 
+#if DEMONSTRATE_CFHOST_ASYNC
     // Asynchronous (non-blocking)
 
     async = TRUE;
 
     status = DemonstrateHost(GetLookups(), &async);
     __Require(status == 0, done);
+#endif // DEMONSTRATE_CFHOST_ASYNC
 
  done:
     return ((status == 0) ? EXIT_SUCCESS : EXIT_FAILURE);
