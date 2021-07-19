@@ -474,6 +474,8 @@ DemonstrateHost(const _CFHostExampleLookups *lookups, Boolean *aAsync)
 {
     int result;
 
+    __CFHostExampleLog("%synchronous lookups...\n", *aAsync ? "As" : "S");
+
     result = DemonstrateHostByName(lookups->mLookupName, aAsync);
     __Require(result == 0, done);
 
@@ -511,16 +513,12 @@ main(void)
 
     // Synchronous (blocking)
 
-    __CFHostExampleLog("Synchronous lookups...\n");
-
     async = FALSE;
 
     status = DemonstrateHost(GetLookups(), &async);
     __Require(status == 0, done);
 
     // Asynchronous (non-blocking)
-
-    __CFHostExampleLog("Asynchronous lookups...\n");
 
     async = TRUE;
 
