@@ -42,6 +42,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 
 #define USE_LOCAL_SCOPE_LOOKUPS      1
+#define USE_GLOBAL_SCOPE_LOOKUPS     !USE_LOCAL_SCOPE_LOOKUPS
 
 #if !defined(LOG_CFHOSTEXAMPLE)
 #define LOG_CFHOSTEXAMPLE            0
@@ -80,6 +81,14 @@ static const _CFHostExampleLookups sLocalScopeLookups = {
     "::1"
 };
 #endif // USE_LOCAL_SCOPE_LOOKUPS
+
+#if USE_GLOBAL_SCOPE_LOOKUPS
+static const _CFHostExampleLookups sGlobalScopeLookups = {
+    "dns.google",
+    "8.8.8.8",
+    "2001:4860:4860::8888"
+};
+#endif // USE_GLOBAL_SCOPE_LOOKUPS
 
 static void
 LogResolutionStatus(Boolean aResolved, const char *aWhat)
@@ -485,8 +494,10 @@ GetLookups(void)
 
 #if USE_LOCAL_SCOPE_LOOKUPS
     lookups = &sLocalScopeLookups;
+#elif USE_GLOBAL_SCOPE_LOOKUPS
+    lookups = &sGlobalScopeLookups;
 #else
-#error "Set USE_LOCAL_SCOPE_LOOKUPS to one (1)."
+#error "Choose one of USE_LOCAL_SCOPE_LOOKUPS or USE_GLOBAL_SCOPE_LOOKUPS."
 #endif
 
     return (lookups);
