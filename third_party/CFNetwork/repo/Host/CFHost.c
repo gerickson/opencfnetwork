@@ -1961,10 +1961,8 @@ _AresHostByCompletedCallBack(void *arg,
         ares_request->_request_pending--;
     }
 
-    if (status == ARES_SUCCESS)
-    {
-        if (hostent != NULL)
-        {
+    if (status == ARES_SUCCESS) {
+        if (hostent != NULL) {
             struct addrinfo *ai;
 #if LOG_CFHOST
             _LogHostent(hostent);
@@ -1988,29 +1986,54 @@ _AresHostByCompletedCallBack(void *arg,
                 if (ares_request->_request_lookup == NULL) {
                     ares_request->_request_lookup = _AresCreateNullLookup();
                 }
-
-                if (ares_request->_request_lookup != NULL) {
-                    if (ares_request->_request_name != NULL) {
-                        // Invoke the common, shared
-                        // {ares_,}getaddrinfo{,_a} callback.
-
-                        _GetAddrInfoCallBackWithFree(_AresStatusMapToAddrInfoError(status),
-                                                     ares_request->_request_addrinfo,
-                                                     ares_request->_request_host,
-                                                     _AresFreeAddrInfo);
-
-                        // Release the buffer that was previously allocated
-                        // for the lookup name when the request was made.
-
-                        CFAllocatorDeallocate(kCFAllocatorDefault, (void *)ares_request->_request_name);
-                        ares_request->_request_name = NULL;
-                    }
-                }
             }
+        }
+    } else {
+        __CFHostMaybeLog("Forward DNS lookup failed: %d: %s\n",
+                         status, ares_strerror(status));
+    }
+
+    // If there are no further requests pending, then we are at a
+    // "Happy Eyeballs" decision point. By extension of being in this
+    // call back, we issued one or two lookup requests via
+    // ares_gethostbyaddr: an IPv4-only request, an IPv6-only request,
+    // or a parallel IPv4 and IPv6 request. One or both could have
+    // succeeded or both failed. Complete the lookup accordingly and
+    // release the resources associated with the original lookup.
+
+    if (ares_request->_request_pending == 0) {
+        const int last_status = ares_request->_request_status;
+        const int this_status = status;
+        int       final_status;
+
+        if ((last_status == ARES_SUCCESS) || (this_status == ARES_SUCCESS)) {
+            final_status = ARES_SUCCESS;
+        } else {
+            final_status = last_status;
+        }
+
+        // Invoke the common, shared callback for
+        // {ares_,}getaddrinfo{,_a} with the derived final lookup
+        // status.
+
+        _GetAddrInfoCallBackWithFree(_AresStatusMapToAddrInfoError(final_status),
+                                     ares_request->_request_addrinfo,
+                                     ares_request->_request_host,
+                                     _AresFreeAddrInfo);
+
+        // Release the buffer that was previously allocated
+        // for the lookup name when the request was made.
+
+        if (ares_request->_request_name != NULL) {
+            CFAllocatorDeallocate(kCFAllocatorDefault,
+                                  (void *)ares_request->_request_name);
+            ares_request->_request_name = NULL;
         }
     }
 
-    ares_request->_request_status = status;
+    if (ares_request->_request_status != ARES_SUCCESS) {
+        ares_request->_request_status = status;
+    }
 }
 
 /* static */ void
@@ -2079,7 +2102,9 @@ _AresNameInfoCompletedCallBack(void *arg,
         }
     }
 
-    ares_request->_request_status = status;
+    if (ares_request->_request_status != ARES_SUCCESS) {
+        ares_request->_request_status = status;
+    }
 }
 
 /**
