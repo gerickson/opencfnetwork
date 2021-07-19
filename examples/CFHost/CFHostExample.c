@@ -44,6 +44,9 @@
 #define DEMONSTRATE_CFHOST_SYNC      1
 #define DEMONSTRATE_CFHOST_ASYNC     1
 
+#define DEMONSTRATE_CFHOST_ADDRESSES 1
+#define DEMONSTRATE_CFHOST_NAMES     1
+
 #define USE_LOCAL_SCOPE_LOOKUPS      1
 #define USE_GLOBAL_SCOPE_LOOKUPS     !USE_LOCAL_SCOPE_LOOKUPS
 
@@ -349,6 +352,7 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
     return (status);
 }
 
+#if DEMONSTRATE_CFHOST_ADDRESSES
 static int
 DemonstrateHostByName(const char *name, Boolean *aAsync)
 {
@@ -376,7 +380,9 @@ DemonstrateHostByName(const char *name, Boolean *aAsync)
 
     return (status);
 }
+#endif // DEMONSTRATE_CFHOST_ADDRESSES
 
+#if DEMONSTRATE_CFHOST_NAMES
 static int
 DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, size_t length, Boolean *aAsync)
 {
@@ -471,6 +477,7 @@ DemonstrateHostByAddressIPv6(const char *aAddressString, Boolean *aAsync)
 
     return (status);
 }
+#endif // DEMONSTRATE_CFHOST_NAMES
 
 static int
 DemonstrateHost(const _CFHostExampleLookups *lookups, Boolean *aAsync)
@@ -479,14 +486,18 @@ DemonstrateHost(const _CFHostExampleLookups *lookups, Boolean *aAsync)
 
     __CFHostExampleLog("%synchronous lookups...\n", *aAsync ? "As" : "S");
 
+#if DEMONSTRATE_CFHOST_ADDRESSES
     result = DemonstrateHostByName(lookups->mLookupName, aAsync);
     __Require(result == 0, done);
+#endif
 
+#if DEMONSTRATE_CFHOST_NAMES
     result = DemonstrateHostByAddressIPv4(lookups->mLookupIPv4Address, aAsync);
     __Require(result == 0, done);
 
     result = DemonstrateHostByAddressIPv6(lookups->mLookupIPv6Address, aAsync);
     __Require(result == 0, done);
+#endif
 
  done:
     return (result);
