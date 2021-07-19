@@ -41,17 +41,33 @@
 #include <CFNetwork/CFNetwork.h>
 #include <CoreFoundation/CoreFoundation.h>
 
-#define DEMONSTRATE_CFHOST_SYNC      1
-#define DEMONSTRATE_CFHOST_ASYNC     1
+// NOTE: At present, synchronous lookups on Darwin platforms are
+// intrinsically broken, returning either an
+// kCFStreamErrorDomainNetDB:NETBD_INTERNAL or
+// kCFStreamErrorDomainNetDB:EAI_FAIL error. Ostensibly, this could be
+// made to work on Linux with c-ares; however, it is unclear whether
+// workalike behavior should be failing as things do on Darwin or
+// working correctly and fixing the Darwin behavior here, even though
+// that would be inconsistent with shipping Darwin platforms from
+// Apple on official builds of CFNetwork.
+//
+// As a result of this, DEMONSTRATE_CFHOST_SYNC is zero (0) until this
+// is resolved one way or another.
 
-#define DEMONSTRATE_CFHOST_ADDRESSES 1
-#define DEMONSTRATE_CFHOST_NAMES     1
+#define DEMONSTRATE_CFHOST_SYNC       0
+#define DEMONSTRATE_CFHOST_ASYNC      1
 
-#define USE_LOCAL_SCOPE_LOOKUPS      1
-#define USE_GLOBAL_SCOPE_LOOKUPS     !USE_LOCAL_SCOPE_LOOKUPS
+#define DEMONSTRATE_CFHOST_ADDRESSES  1
+#define DEMONSTRATE_CFHOST_NAMES      1
+
+#define DEMONSTRATE_CFHOST_NAMES_IPV4 1
+#define DEMONSTRATE_CFHOST_NAMES_IPV6 1
+
+#define USE_LOCAL_SCOPE_LOOKUPS       1
+#define USE_GLOBAL_SCOPE_LOOKUPS      !USE_LOCAL_SCOPE_LOOKUPS
 
 #if !defined(LOG_CFHOSTEXAMPLE)
-#define LOG_CFHOSTEXAMPLE            0
+#define LOG_CFHOSTEXAMPLE             0
 #endif
 
 #define __CFHostExampleLog(format, ...)       do { fprintf(stderr, format, ##__VA_ARGS__); fflush(stderr); } while (0)
@@ -442,6 +458,7 @@ DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, si
     return (status);
 }
 
+#if DEMONSTRATE_CFHOST_NAMES_IPV4
 static int
 DemonstrateHostByAddressIPv4(const char *aAddressString, Boolean *aAsync)
 {
@@ -459,7 +476,9 @@ DemonstrateHostByAddressIPv4(const char *aAddressString, Boolean *aAsync)
 
     return (status);
 }
+#endif // DEMONSTRATE_CFHOST_NAMES_IPV4
 
+#if DEMONSTRATE_CFHOST_NAMES_IPV6
 static int
 DemonstrateHostByAddressIPv6(const char *aAddressString, Boolean *aAsync)
 {
@@ -477,6 +496,7 @@ DemonstrateHostByAddressIPv6(const char *aAddressString, Boolean *aAsync)
 
     return (status);
 }
+#endif // DEMONSTRATE_CFHOST_NAMES_IPV6
 #endif // DEMONSTRATE_CFHOST_NAMES
 
 static int
@@ -492,12 +512,16 @@ DemonstrateHost(const _CFHostExampleLookups *lookups, Boolean *aAsync)
 #endif
 
 #if DEMONSTRATE_CFHOST_NAMES
+#if DEMONSTRATE_CFHOST_NAMES_IPV4
     result = DemonstrateHostByAddressIPv4(lookups->mLookupIPv4Address, aAsync);
     __Require(result == 0, done);
+#endif // DEMONSTRATE_CFHOST_NAMES_IPV4
 
+#if DEMONSTRATE_CFHOST_NAMES_IPV6
     result = DemonstrateHostByAddressIPv6(lookups->mLookupIPv6Address, aAsync);
     __Require(result == 0, done);
-#endif
+#endif // DEMONSTRATE_CFHOST_NAMES_IPV6
+#endif // DEMONSTRATE_CFHOST_NAMES
 
  done:
     return (result);
