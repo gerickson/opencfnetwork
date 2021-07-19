@@ -269,6 +269,7 @@ typedef struct {
  *
  */
 typedef void (*FreeAddrInfoCallBack)(struct addrinfo *res);
+typedef void (*FreeNameInfoCallBack)(char *node, char *service);
 
 
 #if 0
@@ -294,6 +295,7 @@ static void                     _ExpireCacheEntries(void);
 static void                     _GetAddrInfoCallBack(int eai_status, const struct addrinfo* res, void* ctxt);
 #endif
 static void                     _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *ctxt, FreeAddrInfoCallBack freeaddrinfo_cb);
+static void                     _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean lookup);
 static void                     _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, _CFHost * host, CFHostClientCallBack *cb, void **info, CFStreamError *error, Boolean lookup);
 static void                     _HandleGetAddrInfoStatus(int eai_status, CFStreamError* error, Boolean intuitStatus);
 static _CFHost*                 _HostCreate(CFAllocatorRef allocator);
@@ -377,7 +379,6 @@ static void                     _DNSCallBack(int32_t status, char *buf, uint32_t
 static void                     _DNSMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 static void                     _GetAddrInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 static void                     _GetNameInfoCallBack(int eai_status, char *hostname, char *serv, void* ctxt);
-static void                     _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean lookup);
 static void                     _GetNameInfoMachPortCallBack(CFMachPortRef port, void* msg, CFIndex size, void* info);
 static Boolean                  _IsDottedIp(CFStringRef name);
 static void                     _NetworkReachabilityByIPCallBack(_CFHost* host);
@@ -2064,42 +2065,17 @@ _AresNameInfoCompletedCallBack(void *arg,
                 if (ares_request->_request_lookup == NULL) {
                     ares_request->_request_lookup = _AresCreateNullLookup();
                 }
-
-                if (ares_request->_request_lookup != NULL) {
-                    if (ares_request->_request_name == NULL) {
-                        _CFHost *            host = ares_request->_request_host;
-                        CFHostClientCallBack cb   = NULL;
-                        void *               info = NULL;
-                        CFStreamError        error;
-
-                        _GetNameInfoCallBackWithFree_NoLock(_AresStatusMapToAddrInfoError(status),
-                                                            node,
-                                                            service,
-                                                            host,
-                                                            &cb,
-                                                            &info,
-                                                            &error,
-                                                            ares_request->_request_host->_lookup != NULL);
-
-                        // If there is a callback, inform the client
-                        // of the successful lookup completion.
-
-                        if (cb) {
-                            // Unlock the host since the call out may
-                            // call back into the object; if the host
-                            // is locked, the call will deadlock.
-
-                            __CFSpinUnlock(&(host->_lock));
-
-                            cb((CFHostRef)host, kCFHostNames, &error, info);
-
-                            // Lock down the host again
-                            __CFSpinLock(&(host->_lock));
-                        }
-                    }
-                }
             }
         }
+    }
+
+    if (ares_request->_request_pending == 0) {
+        _GetNameInfoCallBackWithFree(_AresStatusMapToAddrInfoError(status),
+                                     node,
+                                     service,
+                                     ares_request->_request_host,
+                                     NULL,
+                                     ares_request->_request_host->_lookup != NULL);
     }
 
     if (ares_request->_request_status != ARES_SUCCESS) {
@@ -2473,7 +2449,7 @@ _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error) {
     ares_request->_request_pending = 1;
 
     if (sa_len > 0) {
-        const int flags = (ARES_NI_NAMEREQD);
+        const int flags = (ARES_NI_LOOKUPHOST | ARES_NI_LOOKUPSERVICE);
 
         ares_getnameinfo(ares_request->_request_channel,
                          sa,
@@ -2831,7 +2807,7 @@ _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, 
     __Require(error != NULL, done);
 
 	// If the lookup canceled, don't need to do any of this.
-	if (!lookup || (lookup && (host->_lookup != NULL))) {
+	if (host->_lookup) {
 
 		// Make sure to toss the cached info now.
 		CFDictionaryRemoveValue(host->_info, (const void*)kCFHostNames);
@@ -2885,18 +2861,15 @@ _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, 
 		memmove(error, &(host->_error), sizeof(*error));
 		*info = host->_client.info;
 
-        if ((lookup == true) && (host->_lookup != NULL)) {
-            // Remove the lookup from run loops and modes
-            _CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
+        // Remove the lookup from run loops and modes
+        _CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
 
-            // Go ahead and invalidate the lookup
-            _CFTypeInvalidate(host->_lookup);
+        // Go ahead and invalidate the lookup
+        _CFTypeInvalidate(host->_lookup);
 
-            // Release the lookup now.
-            CFRelease(host->_lookup);
-            host->_lookup = NULL;
-        }
-
+        // Release the lookup now.
+        CFRelease(host->_lookup);
+        host->_lookup = NULL;
         host->_type = _kCFNullHostInfoType;
 	}
 
@@ -2904,7 +2877,6 @@ _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, 
     return;
 }
 
-#if defined(__MACH__)
 /* static */ void
 _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean lookup) {
 	_CFHost *            host = (_CFHost*)ctxt;
@@ -2944,6 +2916,7 @@ _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* c
 	CFRelease((CFHostRef)host);
 }
 
+#if defined(__MACH__)
 /* static */ void
 _FreeNameInfoCallBack_Mach(char *hostname, char *serv) {
     if (hostname) free(hostname);
