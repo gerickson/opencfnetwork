@@ -296,11 +296,12 @@ static void                     _GetAddrInfoCallBackWithFree(int eai_status, con
 static void                     _GetNameInfoCallBackWithFreeAndWithShouldLock(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean should_lock);
 static void                     _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, _CFHost * host, CFHostClientCallBack *cb, void **info, CFStreamError *error);
 static void                     _HandleGetAddrInfoStatus(int eai_status, CFStreamError* error, Boolean intuitStatus);
+static Boolean                  _HostBlockUntilComplete(_CFHost* host);
+static void                     _HostCancel(_CFHost* host);
 static _CFHost*                 _HostCreate(CFAllocatorRef allocator);
 static void                     _HostDestroy(_CFHost* host);
 static CFStringRef              _HostDescribe(_CFHost* host);
-static void                     _HostCancel(_CFHost* host);
-static Boolean                  _HostBlockUntilComplete(_CFHost* host);
+static void                     _HostLookupCancel_NoLock(_CFHost* host);
 #if defined(__MACH__) || (HAVE_GETADDRINFO_A && 0)
 static void                     _InitGetAddrInfoHints(CFHostInfoType info, struct addrinfo *hints);
 #endif
@@ -496,15 +497,7 @@ _HostDestroy(_CFHost* host) {
 
 	// If there is a lookup, release it.
 	if (host->_lookup) {
-
-		// Remove the lookup from run loops and modes
-		_CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
-
-		// Go ahead and invalidate the lookup
-		_CFTypeInvalidate(host->_lookup);
-
-		// Release the lookup now.
-		CFRelease(host->_lookup);
+        _HostLookupCancel_NoLock(host);
 	}
 
 	// Release any gathered information
@@ -564,16 +557,7 @@ _HostCancel(_CFHost* host) {
 		memmove(&error, &(host->_error), sizeof(error));
 		info = host->_client.info;
 
-		// Remove the lookup from run loops and modes
-		_CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
-
-		// Invalidate the run loop source that got here
-		CFRunLoopSourceInvalidate((CFRunLoopSourceRef)(host->_lookup));
-
-		// Release the lookup now.
-		CFRelease(host->_lookup);
-		host->_lookup = NULL;
-		host->_type = _kCFNullHostInfoType;
+        _HostLookupCancel_NoLock(host);
 	}
 
 	// Unlock the host so the callback can be made safely.
@@ -628,6 +612,25 @@ _HostBlockUntilComplete(_CFHost* host) {
 	return result;
 }
 
+/* static */ void
+_HostLookupCancel_NoLock(_CFHost* host) {
+
+    __Require(host != NULL, done);
+
+    // Remove the lookup from run loops and modes
+    _CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
+
+    // Invalidate the lookup
+    _CFTypeInvalidate(host->_lookup);
+
+    // Release the lookup.
+    CFRelease(host->_lookup);
+    host->_lookup = NULL;
+    host->_type = _kCFNullHostInfoType;
+
+ done:
+    return;
+}
 
 /* static */ Boolean
 _CreateLookup_NoLock(_CFHost* host, CFHostInfoType info, Boolean* _Radar4012176) {
@@ -2794,16 +2797,7 @@ _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *c
 		memmove(&error, &(host->_error), sizeof(error));
 		info = host->_client.info;
 
-		// Remove the lookup from run loops and modes
-		_CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
-
-		// Go ahead and invalidate the lookup
-		_CFTypeInvalidate(host->_lookup);
-
-		// Release the lookup now.
-		CFRelease(host->_lookup);
-		host->_lookup = NULL;
-		host->_type = _kCFNullHostInfoType;
+        _HostLookupCancel_NoLock(host);
 	}
 
 	// Unlock the host so the callback can be made safely.
@@ -2903,16 +2897,7 @@ _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, 
 		memmove(error, &(host->_error), sizeof(*error));
 		*info = host->_client.info;
 
-        // Remove the lookup from run loops and modes
-        _CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
-
-        // Go ahead and invalidate the lookup
-        _CFTypeInvalidate(host->_lookup);
-
-        // Release the lookup now.
-        CFRelease(host->_lookup);
-        host->_lookup = NULL;
-        host->_type = _kCFNullHostInfoType;
+        _HostLookupCancel_NoLock(host);
 	}
 
  done:
@@ -3044,16 +3029,7 @@ _NetworkReachabilityCallBack(SCNetworkReachabilityRef target, SCNetworkConnectio
 		memmove(&error, &(host->_error), sizeof(error));
 		info = host->_client.info;
 
-		// Remove the lookup from run loops and modes
-		_CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
-
-		// "Invalidate" the reachability object by removing the client
-		SCNetworkReachabilitySetCallback((SCNetworkReachabilityRef)(host->_lookup), NULL, NULL);
-
-		// Release the lookup now.
-		CFRelease(host->_lookup);
-		host->_lookup = NULL;
-		host->_type = _kCFNullHostInfoType;
+        _HostLookupCancel_NoLock(host);
 	}
 
 	// Unlock the host so the callback can be made safely.
@@ -3093,16 +3069,7 @@ _NetworkReachabilityByIPCallBack(_CFHost* host) {
 		memmove(&error, &(host->_error), sizeof(error));
 		info = host->_client.info;
 
-		// Remove the lookup from run loops and modes
-		_CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
-
-		// Invalidate the run loop source that got here
-		CFRunLoopSourceInvalidate((CFRunLoopSourceRef)(host->_lookup));
-
-		// Release the lookup now.
-		CFRelease(host->_lookup);
-		host->_lookup = NULL;
-		host->_type = _kCFNullHostInfoType;
+        _HostLookupCancel_NoLock(host);
 	}
 
 	// Unlock the host so the callback can be made safely.
@@ -3199,16 +3166,7 @@ _DNSCallBack_Mach(int32_t status, char *buf, uint32_t len, struct sockaddr *from
 		memmove(&error, &(host->_error), sizeof(error));
 		info = host->_client.info;
 
-		// Remove the lookup from run loops and modes
-		_CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
-
-		// Go ahead and invalidate the lookup
-		CFMachPortInvalidate((CFMachPortRef)(host->_lookup));
-
-		// Release the lookup now.
-		CFRelease(host->_lookup);
-		host->_lookup = NULL;
-		host->_type = _kCFNullHostInfoType;
+        _HostLookupCancel_NoLock(host);
 	}
 
 	// Unlock the host so the callback can be made safely.
@@ -3422,16 +3380,7 @@ _AddressLookupPerform(_CFHost* host) {
 	memmove(&error, &(host->_error), sizeof(error));
 	info = host->_client.info;
 
-	// Remove the lookup from run loops and modes
-	_CFTypeUnscheduleFromMultipleRunLoops(host->_lookup, host->_schedules);
-
-	// Go ahead and invalidate the lookup
-	CFRunLoopSourceInvalidate((CFRunLoopSourceRef)(host->_lookup));
-
-	// Release the lookup now.
-	CFRelease(host->_lookup);
-	host->_lookup = NULL;
-	host->_type = _kCFNullHostInfoType;
+    _HostLookupCancel_NoLock(host);
 
 	// Unlock the host so the callback can be made safely.
 	__CFSpinUnlock(&host->_lock);
