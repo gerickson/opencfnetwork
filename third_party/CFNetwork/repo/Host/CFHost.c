@@ -406,6 +406,19 @@ static CFMutableDictionaryRef _HostCache;		/* Cached hostname lookups (successes
 
 #if 0
 #pragma mark -
+#pragma mark Inline Function Definitions
+#endif
+
+CF_INLINE void _CFHostLock(_CFHost *host) {
+    __CFSpinLock(&(host->_lock));
+}
+
+CF_INLINE void _CFHostUnlock(_CFHost *host) {
+    __CFSpinUnlock(&(host->_lock));
+}
+
+#if 0
+#pragma mark -
 #pragma mark Static Function Definitions
 #endif
 
@@ -448,9 +461,9 @@ _HostCreate(CFAllocatorRef allocator) {
 	CFDictionaryKeyCallBacks keys = {0, NULL, NULL, NULL, NULL, NULL};
 
 	_CFHost* result = (_CFHost*)_CFRuntimeCreateInstance(allocator,
-														   CFHostGetTypeID(),
-														   sizeof(result[0]) - sizeof(CFRuntimeBase),
-														   NULL);
+                                                         CFHostGetTypeID(),
+                                                         sizeof(result[0]) - sizeof(CFRuntimeBase),
+                                                         NULL);
 
 	if (result) {
 
@@ -489,7 +502,7 @@ _HostCreate(CFAllocatorRef allocator) {
 _HostDestroy(_CFHost* host) {
 
 	// Prevent anything else from taking hold
-	__CFSpinLock(&(host->_lock));
+	_CFHostLock(host);
 
 	// Release the user's context info if there is some and a release method
 	if (host->_client.info && host->_client.release)
@@ -515,7 +528,7 @@ _HostDescribe(_CFHost* host) {
 
 	CFStringRef result;
 
-	__CFSpinLock(&host->_lock);
+	_CFHostLock(host);
 
 	result = CFStringCreateWithFormat(CFGetAllocator((CFHostRef)host),
 									  NULL,
@@ -523,7 +536,7 @@ _HostDescribe(_CFHost* host) {
 									  host,
 									  host->_info);
 
-	__CFSpinUnlock(&host->_lock);
+	_CFHostUnlock(host);
 
 	return result;
 }
@@ -542,7 +555,7 @@ _HostCancel(_CFHost* host) {
 	CFRetain((CFHostRef)host);
 
 	// Lock the host
-	__CFSpinLock(&host->_lock);
+	_CFHostLock(host);
 
 	// If the lookup canceled, don't need to do any of this.
 	if (host->_lookup) {
@@ -561,7 +574,7 @@ _HostCancel(_CFHost* host) {
 	}
 
 	// Unlock the host so the callback can be made safely.
-	__CFSpinUnlock(&host->_lock);
+	_CFHostUnlock(host);
 
 	// If there is a callback, inform the client of the finish.
 	if (cb)
@@ -583,20 +596,20 @@ _HostBlockUntilComplete(_CFHost* host) {
 	CFHostScheduleWithRunLoop((CFHostRef)host, rl, _kCFHostBlockingMode);
 
 	// Lock in order to check for lookup
-	__CFSpinLock(&(host->_lock));
+	_CFHostLock(host);
 
 	// Check that lookup exists.
 	while (host->_lookup) {
 
 		// Unlock again so the host can continue to be processed.
-		__CFSpinUnlock(&(host->_lock));
+		_CFHostUnlock(host);
 
 		// Run the loop in a private mode with it returning whenever a source
 		// has been handled.
 		CFRunLoopRunInMode(_kCFHostBlockingMode, DBL_MAX, TRUE);
 
 		// Lock again in preparation for lookup check
-		__CFSpinLock(&(host->_lock));
+		_CFHostLock(host);
 	}
 
 	// Fail if there was an error.
@@ -604,7 +617,7 @@ _HostBlockUntilComplete(_CFHost* host) {
 		result = FALSE;
 
 	// Unlock the host again.
-	__CFSpinUnlock(&(host->_lock));
+	_CFHostUnlock(host);
 
 	// Unschedule from the blocking mode
 	CFHostUnscheduleFromRunLoop((CFHostRef)host, rl, _kCFHostBlockingMode);
@@ -1137,11 +1150,11 @@ _SignalFdClearGetAddrInfoSignalWithHost(_CFHost *host) {
 	sigset_t  sigset;
 	int       result;
 
-	__CFSpinLock(&host->_lock);
+	_CFHostLock(host);
 
 	result = _SignalFdClearSignalWithError(signal, &sigset, &host->_error);
 
-	__CFSpinUnlock(&host->_lock);
+	_CFHostUnlock(host);
 
 	return result;
 }
@@ -2703,7 +2716,7 @@ _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *c
 	CFRetain((CFHostRef)host);
 
 	// Lock the host
-	__CFSpinLock(&host->_lock);
+	_CFHostLock(host);
 
 	// If the lookup canceled, don't need to do any of this.
 	if (host->_lookup) {
@@ -2801,7 +2814,7 @@ _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *c
 	}
 
 	// Unlock the host so the callback can be made safely.
-	__CFSpinUnlock(&host->_lock);
+	_CFHostUnlock(host);
 
 	// Release the results if some were received.
     if (res) {
@@ -2918,7 +2931,7 @@ _GetNameInfoCallBackWithFreeAndWithShouldLock(int eai_status, char *hostname, ch
 	// Lock the host, if requested.
 
     if (should_lock) {
-        __CFSpinLock(&host->_lock);
+        _CFHostLock(host);
     }
 
     _GetNameInfoCallBackWithFree_NoLock(eai_status,
@@ -2933,7 +2946,7 @@ _GetNameInfoCallBackWithFreeAndWithShouldLock(int eai_status, char *hostname, ch
 	// callback can be made safely.
 
     if (should_lock) {
-        __CFSpinUnlock(&host->_lock);
+        _CFHostUnlock(host);
     }
 
 	// Release the results if there were any.
@@ -2948,7 +2961,7 @@ _GetNameInfoCallBackWithFreeAndWithShouldLock(int eai_status, char *hostname, ch
     // locked.
 
     if (!should_lock) {
-        __CFSpinUnlock(&host->_lock);
+        _CFHostUnlock(host);
     }
 
 	// If there is a callback, inform the client of the finish.
@@ -2958,7 +2971,7 @@ _GetNameInfoCallBackWithFreeAndWithShouldLock(int eai_status, char *hostname, ch
     // Restore the host lock state, as appropriate and requested.
 
     if (!should_lock) {
-        __CFSpinLock(&host->_lock);
+        _CFHostLock(host);
     }
 
 	// Go ahead and release now that the callback is done.
@@ -2999,7 +3012,7 @@ _NetworkReachabilityCallBack(SCNetworkReachabilityRef target, SCNetworkConnectio
 	CFRetain((CFHostRef)host);
 
 	// Lock the host
-	__CFSpinLock(&host->_lock);
+	_CFHostLock(host);
 
 	// If the lookup canceled, don't need to do any of this.
 	if (host->_lookup) {
@@ -3033,7 +3046,7 @@ _NetworkReachabilityCallBack(SCNetworkReachabilityRef target, SCNetworkConnectio
 	}
 
 	// Unlock the host so the callback can be made safely.
-	__CFSpinUnlock(&host->_lock);
+	_CFHostUnlock(host);
 
 	// If there is a callback, inform the client of the finish.
 	if (cb)
@@ -3057,7 +3070,7 @@ _NetworkReachabilityByIPCallBack(_CFHost* host) {
 	CFRetain((CFHostRef)host);
 
 	// Lock the host
-	__CFSpinLock(&host->_lock);
+	_CFHostLock(host);
 
 	// If the lookup canceled, don't need to do any of this.
 	if (host->_lookup) {
@@ -3073,7 +3086,7 @@ _NetworkReachabilityByIPCallBack(_CFHost* host) {
 	}
 
 	// Unlock the host so the callback can be made safely.
-	__CFSpinUnlock(&host->_lock);
+	_CFHostUnlock(host);
 
 	// If there is a callback, inform the client of the finish.
 	if (cb)
@@ -3099,7 +3112,7 @@ _DNSCallBack_Mach(int32_t status, char *buf, uint32_t len, struct sockaddr *from
 	CFRetain((CFHostRef)context);
 
 	// Lock the host
-	__CFSpinLock(&host->_lock);
+	_CFHostLock(host);
 
 	// If the lookup canceled, don't need to do any of this.
 	if (host->_lookup) {
@@ -3170,7 +3183,7 @@ _DNSCallBack_Mach(int32_t status, char *buf, uint32_t len, struct sockaddr *from
 	}
 
 	// Unlock the host so the callback can be made safely.
-	__CFSpinUnlock(&host->_lock);
+	_CFHostUnlock(host);
 
 	// If there is a callback, inform the client of the finish.
 	if (cb)
@@ -3262,7 +3275,7 @@ _PrimaryLookupCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStrea
 			CFRunLoopSourceGetContext(src, &ctxt);
 			client = (_CFHost*)ctxt.info;
 
-			__CFSpinLock(&client->_lock);
+			_CFHostLock(client);
 
 			/* Make sure to toss the cached info now. */
 			CFDictionaryRemoveValue(client->_info, (const void*)(client->_type));
@@ -3331,7 +3344,7 @@ _PrimaryLookupCallBack(CFHostRef theHost, CFHostInfoType typeInfo, const CFStrea
 				}
 			}
 
-			__CFSpinUnlock(&client->_lock);
+			_CFHostUnlock(client);
 		}
 
 		CFRelease(list);
@@ -3371,7 +3384,7 @@ _AddressLookupPerform(_CFHost* host) {
 	CFRetain((CFHostRef)host);
 
 	// Lock the host
-	__CFSpinLock(&host->_lock);
+	_CFHostLock(host);
 
 	// Save the callback if there is one at this time.
 	cb = host->_callback;
@@ -3383,7 +3396,7 @@ _AddressLookupPerform(_CFHost* host) {
     _HostLookupCancel_NoLock(host);
 
 	// Unlock the host so the callback can be made safely.
-	__CFSpinUnlock(&host->_lock);
+	_CFHostUnlock(host);
 
 	// If there is a callback, inform the client of the finish.
 	if (cb)
@@ -3645,13 +3658,13 @@ CFHostCreateCopy(CFAllocatorRef allocator, CFHostRef h) {
 		CFRelease(result->_info);
 
 		// Lock original before going to town on it
-		__CFSpinLock(&(host->_lock));
+		_CFHostLock(host);
 
 		// Just make a copy of all the information
 		result->_info = CFDictionaryCreateMutableCopy(allocator, 0, host->_info);
 
 		// Let the original go
-		__CFSpinUnlock(&(host->_lock));
+		_CFHostUnlock(host);
 
 		// If it failed, release the new host and return null
 		if (!result->_info) {
@@ -3717,7 +3730,7 @@ CFHostStartInfoResolution(CFHostRef theHost, CFHostInfoType info, CFStreamError*
 	CFRetain(theHost);
 
 	// Lock down the host to grab the info
-	__CFSpinLock(&(host->_lock));
+	_CFHostLock(host);
 
 	do {
 
@@ -3755,13 +3768,13 @@ CFHostStartInfoResolution(CFHostRef theHost, CFHostInfoType info, CFStreamError*
 		else {
 
 			// Unlock the host
-			__CFSpinUnlock(&(host->_lock));
+			_CFHostUnlock(host);
 
 			// Wait for synchronous return
 			result = _HostBlockUntilComplete(host);
 
 			// Lock down the host to grab the info
-			__CFSpinLock(&(host->_lock));
+			_CFHostLock(host);
 		}
 
 	} while (0);
@@ -3770,7 +3783,7 @@ CFHostStartInfoResolution(CFHostRef theHost, CFHostInfoType info, CFStreamError*
 	memmove(error, &host->_error, sizeof(error[0]));
 
 	// Unlock the host
-	__CFSpinUnlock(&(host->_lock));
+	_CFHostUnlock(host);
 
 	// Release the earlier retain.
 	CFRelease(theHost);
@@ -3794,7 +3807,7 @@ CFHostGetInfo(CFHostRef theHost, CFHostInfoType info, Boolean* hasBeenResolved) 
 	*hasBeenResolved = FALSE;
 
 	// Lock down the host to grab the info
-	__CFSpinLock(&(host->_lock));
+	_CFHostLock(host);
 
 	// Grab the requested information
 	result = (CFTypeRef)CFDictionaryGetValue(host->_info, (const void*)info);
@@ -3811,7 +3824,7 @@ CFHostGetInfo(CFHostRef theHost, CFHostInfoType info, Boolean* hasBeenResolved) 
 	}
 
     // Unlock the host
-    __CFSpinUnlock(&(host->_lock));
+    _CFHostUnlock(host);
 
 	return result;
 }
@@ -3846,7 +3859,7 @@ CFHostCancelInfoResolution(CFHostRef theHost, CFHostInfoType info) {
 	_CFHost* host = (_CFHost*)theHost;
 
 	// Lock down the host
-	__CFSpinLock(&(host->_lock));
+	_CFHostLock(host);
 
 	// Make sure there is something to cancel.
 	if (host->_lookup) {
@@ -3958,7 +3971,7 @@ CFHostCancelInfoResolution(CFHostRef theHost, CFHostInfoType info) {
 	}
 
 	// Unlock the host
-	__CFSpinUnlock(&(host->_lock));
+	_CFHostUnlock(host);
 }
 
 
@@ -3968,7 +3981,7 @@ CFHostSetClient(CFHostRef theHost, CFHostClientCallBack clientCB, CFHostClientCo
 	_CFHost* host = (_CFHost*)theHost;
 
 	// Lock down the host
-	__CFSpinLock(&(host->_lock));
+	_CFHostLock(host);
 
 	// Release the user's context info if there is some and a release method
 	if (host->_client.info && host->_client.release)
@@ -4060,7 +4073,7 @@ CFHostSetClient(CFHostRef theHost, CFHostClientCallBack clientCB, CFHostClientCo
 	}
 
 	// Unlock the host
-	__CFSpinUnlock(&(host->_lock));
+	_CFHostUnlock(host);
 
 	return TRUE;
 }
@@ -4072,7 +4085,7 @@ CFHostScheduleWithRunLoop(CFHostRef theHost, CFRunLoopRef runLoop, CFStringRef r
 	_CFHost* host = (_CFHost*)theHost;
 
 	/* Lock down the host before work */
-	__CFSpinLock(&(host->_lock));
+	_CFHostLock(host);
 
 	/* Try adding the schedule to the list.  If it's added, need to do more work. */
 	if (_SchedulesAddRunLoopAndMode(host->_schedules, runLoop, runLoopMode)) {
@@ -4084,7 +4097,7 @@ CFHostScheduleWithRunLoop(CFHostRef theHost, CFRunLoopRef runLoop, CFStringRef r
 	}
 
 	/* Unlock the host */
-	__CFSpinUnlock(&(host->_lock));
+	_CFHostUnlock(host);
 }
 
 
@@ -4094,7 +4107,7 @@ CFHostUnscheduleFromRunLoop(CFHostRef theHost, CFRunLoopRef runLoop, CFStringRef
 	_CFHost* host = (_CFHost*)theHost;
 
 	/* Lock down the host before work */
-	__CFSpinLock(&(host->_lock));
+	_CFHostLock(host);
 
 	/* Try to remove the schedule from the list.  If it is removed, need to do more. */
 	if (_SchedulesRemoveRunLoopAndMode(host->_schedules, runLoop, runLoopMode)) {
@@ -4106,6 +4119,6 @@ CFHostUnscheduleFromRunLoop(CFHostRef theHost, CFRunLoopRef runLoop, CFStringRef
 	}
 
 	/* Unlock the host */
-	__CFSpinUnlock(&(host->_lock));
+	_CFHostUnlock(host);
 }
 
