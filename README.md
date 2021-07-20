@@ -72,13 +72,14 @@ checking the build results is recommended:
 In addition to depending on the C Standard Libraries, Open CFNetwork
 depends on:
 
+* [avahi](https://www.avahi.org)
 * [c-ares](https://c-ares.haxx.se)
 
 The dependencies can either be satisfied by building them directly
 from source, or on system such as Linux, installing them using a
 package management system. For example, on Debian systems:
 
-    % sudo apt-get libc-ares-dev
+    % sudo apt-get libavahi-compat-libdnssd-dev libc-ares-dev
 
 ## Installing Open CFNetwork
 

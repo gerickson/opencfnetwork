@@ -1,0 +1,105 @@
+#
+#    Copyright (c) 2021 OpenCFNetwork Authors. All Rights Reserved.
+#
+#    This file contains Original Code and/or Modifications of Original Code
+#    as defined in and that are subject to the Apple Public Source License
+#    Version 2.0 (the 'License'). You may not use this file except in
+#    compliance with the License. Please obtain a copy of the License at
+#    http://www.opensource.apple.com/apsl/ and read it before using this
+#    file.
+#
+#    The Original Code and all software distributed under the License are
+#    distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+#    EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+#    INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+#    FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+#    Please see the License for the specific language governing rights and
+#    limitations under the License.
+#
+
+#
+#    Description:
+#      This file is the GitHub Actions hosted, distributed continuous
+#      integration configuration file for OpenCFNetwork
+#
+
+---
+name: Build
+
+on: [push, pull_request]
+
+jobs:
+
+  linux:
+    runs-on: ubuntu-latest
+    name: "Linux ${{matrix.compiler['name']}}"
+    strategy:
+      matrix:
+        compiler:
+          - { name: GCC,        c: gcc,   cxx: g++,     options: "--enable-coverag" }
+    env:
+      CC: ${{matrix.compiler['c']}}
+      CXX: ${{matrix.compiler['cxx']}}
+    steps:
+      - name: Install Common Host Package Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install autoconf automake libtool
+
+      - name: Install OpenCFLite Host Package Dependencies
+        run: |
+          sudo apt-get -y install gobjc gobjc++ uuid-dev libicu-dev
+
+      - name: Install OpenCFNetwork Host Package Dependencies
+        run: |
+          sudo apt-get -y install libavahi-compat-libdnssd-dev libc-ares-dev
+
+      - name: Download OpenCFLite Distribution Archive Dependencies
+        run: |
+          cd /tmp
+          curl https://data.iana.org/time-zones/releases/tzcode2021a.tar.gz -o tzcode2021a.tar.gz || wget https://data.iana.org/time-zones/releases/tzcode2021a.tar.gz
+          mkdir tzcode2021a
+          tar --directory tzcode2021a -zxf tzcode2021a.tar.gz
+
+      - name: Checkout OpenCFLite Dependency
+        uses: actions/checkout@v2
+        with:
+          repository: gerickson/opencflite
+          ref: opencflite-476
+          path: opencflite
+
+      # Note that in Ubuntu 20 and later, with ICU 60 and later, neither
+      # 'pkg-config icu' nor 'icu-config' are supported. Consequently,
+      # we have to explicitly specify '--with-icu=/usr'.
+      #
+      # For this build, we also need neither debug nor profile instances.
+
+      - name: Configure OpenCFLite Dependency
+        run: |
+          cd "${GITHUB_WORKSPACE}/opencflite"
+          ./configure -C --with-icu=/usr --with-tz-includes=/tmp/tzcode2021a --disable-debug --disable-profile
+
+      - name: Build OpenCFLite Dependency
+        run: |
+          cd "${GITHUB_WORKSPACE}/opencflite"
+          make -j
+
+      # Make sure that 'ldconfig' is run such that run time execution
+      # picks up libCoreFoundation.so.476 in /usr/local.
+
+      - name: Install OpenCFLite Dependency
+        run: |
+          cd "${GITHUB_WORKSPACE}/opencflite"
+          sudo make install
+          sudo ldconfig
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Configure
+        run: |
+          ./configure -C ${{matrix.compiler['options']}}
+
+      - name: Build
+        run: |
+          make -j
