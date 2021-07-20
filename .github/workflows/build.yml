@@ -52,7 +52,7 @@ jobs:
 
       - name: Install OpenCFNetwork Host Package Dependencies
         run: |
-          sudo apt-get -y install libc-ares-dev
+          sudo apt-get -y install libavahi-compat-libdnssd-dev libc-ares-dev
 
       - name: Download OpenCFLite Distribution Archive Dependencies
         run: |
