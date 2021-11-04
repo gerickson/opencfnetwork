@@ -245,6 +245,9 @@ typedef struct {
                                            //!< object that will be poll/
                                            //!< select'd for request/response
                                            //!< activity.
+    CFHostInfoType      _request_type;     //!< The type of data that is to be
+                                           //!< resolved for the resolution
+                                           //!< request.
     uint16_t            _request_events;   //!< The poll/select events
                                            //!< currently desired for
                                            //!< _request_lookup.
@@ -335,7 +338,7 @@ static void                     _AresClearOrSetRequestEvents(_CFHostAresRequest 
                                                              uint16_t event,
                                                              Boolean set);
 static CFTypeRef                _AresCreateNullLookup(_CFHostAresRequest *ares_request);
-static _CFHostAresRequest *     _AresCreateRequestAndChannel(_CFHost *host, ares_sock_state_cb sock_state_cb, CFStreamError *error);
+static _CFHostAresRequest *     _AresCreateRequestAndChannel(_CFHost *host, CFHostInfoType type, ares_sock_state_cb sock_state_cb, CFStreamError *error);
 static void                     _AresDestroyRequestAndChannel(_CFHostAresRequest *ares_request);
 static Boolean                  _AresIsNullLookup(const _CFHostAresRequest *ares_request);
 static void                     _AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
@@ -2174,7 +2177,7 @@ _AresNameInfoCompletedCallBack(void *arg,
  *
  */
 /* static */ _CFHostAresRequest *
-_AresCreateRequestAndChannel(_CFHost *host, ares_sock_state_cb sock_state_cb, CFStreamError *error) {
+_AresCreateRequestAndChannel(_CFHost *host, CFHostInfoType type, ares_sock_state_cb sock_state_cb, CFStreamError *error) {
     const int            optmask = ARES_OPT_SOCK_STATE_CB;
     struct ares_options  options;
     int                  status;
@@ -2210,6 +2213,7 @@ _AresCreateRequestAndChannel(_CFHost *host, ares_sock_state_cb sock_state_cb, CF
 
     result->_request_error = error;
     result->_request_host  = host;
+    result->_request_type  = type;
 
  done:
     return result;
@@ -2245,6 +2249,7 @@ _CreatePrimaryAddressLookup_Ares(CFStringRef name, CFHostInfoType info, CFTypeRe
 	__Require(buffer != NULL, done);
 
 	ares_request = _AresCreateRequestAndChannel((_CFHost *)context,
+                                                kCFHostAddresses,
                                                 _AresSocketStateCallBack,
                                                 error);
 	__Require_Action(ares_request != NULL,
@@ -2504,6 +2509,7 @@ _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error) {
 
 
     ares_request = _AresCreateRequestAndChannel(host,
+                                                kCFHostNames,
                                                 _AresSocketStateCallBack,
                                                 error);
 	__Require(ares_request != NULL, done);
