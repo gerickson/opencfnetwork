@@ -353,6 +353,7 @@ static void                     _AresSocketStateCallBack(void *data, ares_socket
 static int                      _AresStatusMapToAddrInfoError(int ares_status);
 static struct addrinfo * _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error);
 static void                     _AresStatusMapToStreamError(int status, CFStreamError *error);
+static void                     _AresUpdateLastStatus(_CFHostAresRequest *ares_request, int status);
 static void                     _CFHostInitializeAres(void);
 static void                     _CopyHostentAddrToAddrInfo(int family, struct addrinfo *ai, const char *data);
 static CFFileDescriptorRef      _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error);
@@ -1965,6 +1966,13 @@ _AresIsNullLookup(CFTypeRef lookup) {
 }
 
 /* static */ void
+_AresUpdateLastStatus(_CFHostAresRequest *ares_request, int status) {
+    if (ares_request->_request_last_status != ARES_SUCCESS) {
+        ares_request->_request_last_status = status;
+    }
+}
+
+/* static */ void
 _AresHostByCompletedCallBack(void *arg,
                              int status,
                              int timeouts,
@@ -2046,9 +2054,7 @@ _AresHostByCompletedCallBack(void *arg,
         }
     }
 
-    if (ares_request->_request_status != ARES_SUCCESS) {
-        ares_request->_request_status = status;
-    }
+    _AresUpdateLastStatus(ares_request, status);
 }
 
 /* static */ void
@@ -2136,9 +2142,7 @@ _AresNameInfoCompletedCallBack(void *arg,
                                                       should_lock);
     }
 
-    if (ares_request->_request_status != ARES_SUCCESS) {
-        ares_request->_request_status = status;
-    }
+    _AresUpdateLastStatus(ares_request, status);
 }
 
 /**
