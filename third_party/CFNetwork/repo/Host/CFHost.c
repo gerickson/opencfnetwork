@@ -334,10 +334,10 @@ static void                     _AresAccumulateAddrInfo(_CFHostAresRequest *ares
 static void                     _AresClearOrSetRequestEvents(_CFHostAresRequest *ares_request,
                                                              uint16_t event,
                                                              Boolean set);
-static CFTypeRef                _AresCreateNullLookup(void);
+static CFTypeRef                _AresCreateNullLookup(_CFHostAresRequest *ares_request);
 static _CFHostAresRequest *     _AresCreateRequestAndChannel(_CFHost *host, ares_sock_state_cb sock_state_cb, CFStreamError *error);
 static void                     _AresDestroyRequestAndChannel(_CFHostAresRequest *ares_request);
-static Boolean                  _AresIsNullLookup(CFTypeRef lookup);
+static Boolean                  _AresIsNullLookup(const _CFHostAresRequest *ares_request);
 static void                     _AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
 static void                     _AresFreeAddrInfo(struct addrinfo *res);
 static void                     _AresHostByCompletedCallBack(void *arg,
@@ -1941,7 +1941,7 @@ _AresAccumulateAddrInfo(_CFHostAresRequest *ares_request, struct addrinfo *ai) {
  *
  */
 /* static */ CFTypeRef
-_AresCreateNullLookup(void) {
+_AresCreateNullLookup(_CFHostAresRequest *ares_request) {
     // Implementation-wise, we choose to return the special kCFNull
     // object which is effectively invariant and will not have any
     // impact by being passed to those methods in CFNetworkSchedule.c.
@@ -1961,14 +1961,14 @@ _AresCreateNullLookup(void) {
  *
  */
 /* static */ Boolean
-_AresIsNullLookup(CFTypeRef lookup) {
-    return CFEqual(lookup, kCFNull);
+_AresIsNullLookup(const _CFHostAresRequest *ares_request) {
+    return CFEqual(ares_request->_request_lookup, kCFNull);
 }
 
 /* static */ void
 _AresUpdateLastStatus(_CFHostAresRequest *ares_request, int status) {
-    if (ares_request->_request_last_status != ARES_SUCCESS) {
-        ares_request->_request_last_status = status;
+    if (ares_request->_request_status != ARES_SUCCESS) {
+        ares_request->_request_status = status;
     }
 }
 
@@ -2007,7 +2007,7 @@ _AresHostByCompletedCallBack(void *arg,
                 // lookup source.
 
                 if (ares_request->_request_lookup == NULL) {
-                    ares_request->_request_lookup = _AresCreateNullLookup();
+                    ares_request->_request_lookup = _AresCreateNullLookup(ares_request);
                 }
             }
         }
@@ -2083,7 +2083,7 @@ _AresNameInfoCompletedCallBack(void *arg,
                 // lookup source.
 
                 if (ares_request->_request_lookup == NULL) {
-                    ares_request->_request_lookup = _AresCreateNullLookup();
+                    ares_request->_request_lookup = _AresCreateNullLookup(ares_request);
                 }
             }
         }
@@ -2125,7 +2125,7 @@ _AresNameInfoCompletedCallBack(void *arg,
 
     if (ares_request->_request_pending == 0) {
         const int            eai_status  = _AresStatusMapToAddrInfoError(status);
-        const Boolean        is_null     = _AresIsNullLookup(ares_request->_request_lookup);
+        const Boolean        is_null     = _AresIsNullLookup(ares_request);
         const Boolean        should_lock = !is_null;
         _CFHost *            host        = ares_request->_request_host;
         FreeNameInfoCallBack free_cb     = NULL;
@@ -2540,7 +2540,7 @@ _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error) {
         // request and channel will be deallocated in the socket state
         // callback.
 
-        if (result == NULL || _AresIsNullLookup(result)) {
+        if (result == NULL || _AresIsNullLookup(ares_request)) {
             _AresDestroyRequestAndChannel(ares_request);
         }
     }
