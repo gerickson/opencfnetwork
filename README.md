@@ -79,7 +79,7 @@ The dependencies can either be satisfied by building them directly
 from source, or on system such as Linux, installing them using a
 package management system. For example, on Debian systems:
 
-    % sudo apt-get libavahi-compat-libdnssd-dev libc-ares-dev
+    % sudo apt-get install libavahi-compat-libdnssd-dev libc-ares-dev
 
 ## Installing Open CFNetwork
 
