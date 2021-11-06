@@ -118,6 +118,10 @@
 #define LOG_CFHOST 0
 #endif
 
+#if !defined(LOG_CFHOST_LOCK)
+#define LOG_CFHOST_LOCK 0
+#endif
+
 #if LOG_CFHOST
 #define __CFHostMaybeLog(format, ...)  do { fprintf(stderr, format, ##__VA_ARGS__); fflush(stderr); } while (0)
 #else
@@ -426,6 +430,22 @@ static CFMutableDictionaryRef _HostCache;		/* Cached hostname lookups (successes
 #pragma mark Inline Function Definitions
 #endif
 
+#if LOG_CFHOST_LOCK
+CF_INLINE void _CFHostLockInFunc(_CFHost *host, const char *func) {
+    __CFHostTraceEnterWithFormat("host %p from %s\n", host, func);
+    __CFSpinLock(&(host->_lock));
+    __CFHostTraceExit();
+}
+
+CF_INLINE void _CFHostUnlockInFunc(_CFHost *host, const char *func) {
+    __CFHostTraceEnterWithFormat("host %p from %s\n", host, func);
+    __CFSpinUnlock(&(host->_lock));
+    __CFHostTraceExit();
+}
+
+#define _CFHostLock(host)   do { _CFHostLockInFunc(host, __func__); } while (0)
+#define _CFHostUnlock(host) do { _CFHostUnlockInFunc(host, __func__); } while (0)
+#else
 CF_INLINE void _CFHostLock(_CFHost *host) {
     __CFSpinLock(&(host->_lock));
 }
@@ -433,6 +453,7 @@ CF_INLINE void _CFHostLock(_CFHost *host) {
 CF_INLINE void _CFHostUnlock(_CFHost *host) {
     __CFSpinUnlock(&(host->_lock));
 }
+#endif /* LOG_CFHOST_LOCK */
 
 #if 0
 #pragma mark -
