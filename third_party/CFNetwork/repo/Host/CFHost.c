@@ -1963,20 +1963,6 @@ _AresAccumulateAddrInfo(_CFHostAresRequest *ares_request, struct addrinfo *ai) {
 }
 
 static void
-_AresNullLookupSchedule(void *info, CFRunLoopRef rl, CFStringRef mode) {
-    _CFHostAresRequest *ares_request = (_CFHostAresRequest *)(info);
-
-    __CFHostTraceEnterWithFormat("info %p rl %p mode %p\n",
-                                 info, rl, mode);
-
-#if LOG_CFHOST
-    CFShow(mode);
-#endif
-
-    __CFHostTraceExit();
-}
-
-static void
 _AresNullLookupCancel(void *info, CFRunLoopRef rl, CFStringRef mode) {
     _CFHostAresRequest *ares_request = (_CFHostAresRequest *)(info);
 
@@ -2050,7 +2036,7 @@ _AresCreateNullLookup(_CFHostAresRequest *ares_request) {
         CFCopyDescription,       // Describe
         NULL,                    // Equal
         NULL,                    // Hash
-        _AresNullLookupSchedule, // Schedule
+        NULL,                    // Schedule
         _AresNullLookupCancel,   // Cancel
         _AresNullLookupPerform   // Perform
     };
