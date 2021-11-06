@@ -115,7 +115,7 @@
 #endif
 
 #if !defined(LOG_CFHOST)
-#define LOG_CFHOST 0
+#define LOG_CFHOST      0
 #endif
 
 #if !defined(LOG_CFHOST_LOCK)
@@ -238,45 +238,53 @@ typedef struct {
  *
  */
 typedef struct {
-    ares_channel        _request_channel;        //!< The c-ares name service
-                                                 //!< channel used to initiate
-                                                 //!< requests and receive
-                                                 //!< responses.
-    size_t              _request_pending;        //!< The number of channel
-                                                 //!< requests outstanding.
-    const char *        _request_name;           //!< The lookup name for
-                                                 //!< forward DNS (that is,
-                                                 //!< name-to-address)
-                                                 //!< requests.
-    CFTypeRef           _request_lookup;         //!< The run loop schedulable
-                                                 //!< object that will be poll/
-                                                 //!< select'd for request/
-                                                 //!< response activity.
-    Boolean             _request_lookup_is_null; //!< Indicates whether the
-                                                 //!< _request_lookup is the
-                                                 //!< special "null" (that is,
-                                                 //!< local-only) lookup
-                                                 //!< source.
-    CFHostInfoType      _request_type;           //!< The type of data that is
-                                                 //!< to be resolved for the
-                                                 //!< resolution request.
-    uint16_t            _request_events;         //!< The poll/select events
-                                                 //!< currently desired for
-                                                 //!< _request_lookup.
-    CFStreamError *     _request_error;          //!< A pointer to the stream
-                                                 //!< error for the most recent
-                                                 //!< request.
-    int                 _request_status;         //!< The stream status for
-                                                 //!< the most recent request.
-    struct addrinfo *   _request_addrinfo;       //!< A pointer to the
-                                                 //!< synthesized and
-                                                 //!< accumulated heap-based
-                                                 //!< addrinfo as successful
-                                                 //!< request responses are
-                                                 //!< processed.
-    _CFHost *           _request_host;           //!< A pointer to the host
-                                                 //!< object associated with
-                                                 //!< the request(s).
+    ares_channel        _request_channel;          //!< The c-ares name service
+                                                   //!< channel used to initiate
+                                                   //!< requests and receive
+                                                   //!< responses.
+    size_t              _request_pending;          //!< The number of channel
+                                                   //!< requests outstanding.
+    const char *        _request_name;             //!< The lookup name for
+                                                   //!< forward DNS (that is,
+                                                   //!< name-to-address)
+                                                   //!< requests.
+    const char *        _request_resolved_node;    //!< The resolved node name for
+                                                   //!< short-circuited reverse DNS
+                                                   //!< (that is, address-to-name)
+                                                   //!< requests.
+    const char *        _request_resolved_service; //!< The resolved service name for
+                                                   //!< short-circuited reverse DNS
+                                                   //!< (that is, address-to-name)
+                                                   //!< requests.
+    CFTypeRef           _request_lookup;           //!< The run loop schedulable
+                                                   //!< object that will be poll/
+                                                   //!< select'd for request/
+                                                   //!< response activity.
+    Boolean             _request_lookup_is_null;   //!< Indicates whether the
+                                                   //!< _request_lookup is the
+                                                   //!< special "null" (that is,
+                                                   //!< local-only) lookup
+                                                   //!< source.
+    CFHostInfoType      _request_type;             //!< The type of data that is
+                                                   //!< to be resolved for the
+                                                   //!< resolution request.
+    uint16_t            _request_events;           //!< The poll/select events
+                                                   //!< currently desired for
+                                                   //!< _request_lookup.
+    CFStreamError *     _request_error;            //!< A pointer to the stream
+                                                   //!< error for the most recent
+                                                   //!< request.
+    int                 _request_status;           //!< The stream status for
+                                                   //!< the most recent request.
+    struct addrinfo *   _request_addrinfo;         //!< A pointer to the
+                                                   //!< synthesized and
+                                                   //!< accumulated heap-based
+                                                   //!< addrinfo as successful
+                                                   //!< request responses are
+                                                   //!< processed.
+    _CFHost *           _request_host;             //!< A pointer to the host
+                                                   //!< object associated with
+                                                   //!< the request(s).
 } _CFHostAresRequest;
 #endif /* (HAVE_ARES_INIT && 1) */
 #endif /* defined(__linux__) */
@@ -1993,6 +2001,12 @@ _AresNullLookupPerform(void *info) {
     _CFHostAresRequest *ares_request = (_CFHostAresRequest *)(info);
 
     __CFHostTraceEnterWithFormat("info %p\n", info);
+
+    if (ares_request->_request_type == kCFHostAddresses) {
+        __CFHostMaybeLog("Finalizing a name-to-addresses (forward DNS) lookup...\n");
+    } else if (ares_request->_request_type == kCFHostNames) {
+        __CFHostMaybeLog("Finalizing an address-to-names (reverse DNS) lookup...\n");
+    }
 
     __CFHostTraceExit();
 }
