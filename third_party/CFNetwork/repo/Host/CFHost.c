@@ -1987,6 +1987,8 @@ _AresNullLookupCancel(void *info, CFRunLoopRef rl, CFStringRef mode) {
     CFShow(mode);
 #endif
 
+    ares_cancel(ares_request->_request_channel);
+
     __CFHostTraceExit();
 }
 
