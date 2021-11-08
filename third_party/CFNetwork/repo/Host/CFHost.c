@@ -2303,8 +2303,6 @@ _AresNameInfoCompletedCallBack(void *arg,
         const Boolean        is_null     = _AresIsNullLookup(ares_request);
 
         if (is_null) {
-            ares_request->_request_host->_lookup = ares_request->_request_lookup; // XXX - Necessary?
-
             // In this deferred finalization path, if we have a resolved node
             // or service name, duplicate them. Otherwise, their storage will
             // have gone out of scope following the conclusion of this callback. 
