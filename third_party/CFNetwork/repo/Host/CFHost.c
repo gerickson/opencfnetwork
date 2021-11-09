@@ -2160,9 +2160,9 @@ _AresCreateNullLookup(_CFHostAresRequest *ares_request) {
     CFRunLoopSourceContext context = {
         0,                       // Version
         ares_request,            // Info
-        CFRetain,                // Retain
-        CFRelease,               // Release
-        CFCopyDescription,       // Describe
+        NULL,                    // Retain
+        NULL,                    // Release
+        NULL,                    // Describe
         NULL,                    // Equal
         NULL,                    // Hash
         NULL,                    // Schedule
