@@ -277,9 +277,10 @@ typedef struct {
     CFStreamError *     _request_error;            //!< A pointer to the stream
                                                    //!< error for the most
                                                    //!< recent request.
-    int                 _request_status;           //!< The stream status for
-                                                   //!< the most recent
-                                                   //!< request.
+    int                 _request_last_status;      //!< The stream status for the
+                                                   //!< most recent request.
+    int                 _request_final_status;     //!< The stream status for the
+                                                   //!< final request.
     struct addrinfo *   _request_addrinfo;         //!< A pointer to the
                                                    //!< synthesized and
                                                    //!< accumulated heap-based
@@ -2007,7 +2008,7 @@ _AresNullLookupPerform(void *info) {
     __CFHostTraceEnterWithFormat("info %p\n", info);
 
     if (ares_request->_request_type == kCFHostAddresses) {
-        const int            eai_status = _AresStatusMapToAddrInfoError(ARES_SUCCESS);
+        const int            eai_status = _AresStatusMapToAddrInfoError(ares_request->_request_final_status);
         FreeAddrInfoCallBack free_cb    = _AresFreeAddrInfo;
 
         __CFHostMaybeLog("Finalizing a name-to-addresses (forward DNS) lookup...\n");
@@ -2028,7 +2029,7 @@ _AresNullLookupPerform(void *info) {
 
         _AresDestroyRequestAndChannel(ares_request);
     } else if (ares_request->_request_type == kCFHostNames) {
-        const int            eai_status = _AresStatusMapToAddrInfoError(ARES_SUCCESS);
+        const int            eai_status = _AresStatusMapToAddrInfoError(ares_request->_request_final_status);
         FreeNameInfoCallBack free_cb    = NULL;
 
         __CFHostMaybeLog("Finalizing an address-to-names (reverse DNS) lookup...\n");
@@ -2137,8 +2138,12 @@ _AresIsNullLookup(const _CFHostAresRequest *ares_request) {
 
 /* static */ void
 _AresUpdateLastStatus(_CFHostAresRequest *ares_request, int status) {
-    if (ares_request->_request_status != ARES_SUCCESS) {
-        ares_request->_request_status = status;
+    __CFHostMaybeLog("    Last status was %d (%ssuccessful)\n",
+                     ares_request->_request_last_status,
+                     (ares_request->_request_last_status != ARES_SUCCESS) ? "NOT " : "");
+
+    if (ares_request->_request_last_status != ARES_SUCCESS) {
+        ares_request->_request_last_status = status;
     }
 }
 
@@ -2196,9 +2201,12 @@ _AresHostByCompletedCallBack(void *arg,
 
     if (ares_request->_request_pending == 0) {
         const Boolean  is_null     = _AresIsNullLookup(ares_request);
-        const int      last_status = ares_request->_request_status;
+        const int      last_status = ares_request->_request_last_status;
         const int      this_status = status;
         int            final_status;
+
+        __CFHostMaybeLog("    Concluding host lookup w/ %s lookup...\n",
+                         ((is_null) ? "run loop source" : "descriptor"));
 
         if ((last_status == ARES_SUCCESS) || (this_status == ARES_SUCCESS)) {
             final_status = ARES_SUCCESS;
@@ -2211,6 +2219,8 @@ _AresHostByCompletedCallBack(void *arg,
         // status.
 
         if (is_null) {
+            ares_request->_request_final_status = final_status;
+
             CFRunLoopSourceSignal((CFRunLoopSourceRef)(ares_request->_request_lookup));
         } else {
             _GetAddrInfoCallBackWithFree(_AresStatusMapToAddrInfoError(final_status),
@@ -2299,14 +2309,18 @@ _AresNameInfoCompletedCallBack(void *arg,
     // that case.
 
     if (ares_request->_request_pending == 0) {
-        const int            eai_status  = _AresStatusMapToAddrInfoError(status);
         const Boolean        is_null     = _AresIsNullLookup(ares_request);
+
+        __CFHostMaybeLog("    Concluding name lookup w/ %s lookup...\n",
+                         ((is_null) ? "run loop source" : "descriptor"));
 
         if (is_null) {
             // In this deferred finalization path, if we have a resolved node
             // or service name, duplicate them. Otherwise, their storage will
             // have gone out of scope following the conclusion of this callback. 
             // The duplicated copies will be released in '_AresNullLookupPerform'.
+
+            ares_request->_request_final_status = status;
 
             if (node != NULL) {
                 ares_request->_request_resolved_node = strdup(node);
@@ -2325,7 +2339,7 @@ _AresNameInfoCompletedCallBack(void *arg,
 
             FreeNameInfoCallBack free_cb     = NULL;
 
-            _GetNameInfoCallBackWithFree(eai_status,
+            _GetNameInfoCallBackWithFree(_AresStatusMapToAddrInfoError(status),
                                          node,
                                          service,
                                          ares_request->_request_host,
@@ -2722,8 +2736,8 @@ _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error) {
     // of those cases is a non-success case, handle clean-up
     // appropriately.
 
-    if (ares_request->_request_status != ARES_SUCCESS) {
-        _AresStatusMapToStreamError(ares_request->_request_status, error);
+    if (ares_request->_request_last_status != ARES_SUCCESS) {
+        _AresStatusMapToStreamError(ares_request->_request_last_status, error);
 
         _AresDestroyRequestAndChannel(ares_request);
     } else {
