@@ -1,4 +1,16 @@
 /*
+ * Copyright (c) 2021 Grant Erickson <gerickson@nuovations.com>. All rights reserved.
+ *
+ * This source code is a modified version of the CFNetwork sources
+ * released by Apple Inc. under the terms of the APSL version 2.0 (see
+ * below).
+ *
+ * For information about changes from the original Apple source
+ * release can be found by reviewing the source control system for the
+ * project at http://github.com/gerickson/opencfnetwork/.
+ *
+ * The original license information is as follows:
+ *
  * Copyright (c) 2005 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
@@ -373,6 +385,7 @@ static void                     _AresDestroyRequestAndChannel(_CFHostAresRequest
 static Boolean                  _AresIsNullLookup(const _CFHostAresRequest *ares_request);
 static void                     _AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
 static void                     _AresFreeAddrInfo(struct addrinfo *res);
+static void                     _AresFreeNameInfo(char *hostname, char *serv);
 static void                     _AresHostByCompletedCallBack(void *arg,
                                                              int status,
                                                              int timeouts,
@@ -1826,6 +1839,26 @@ _AresFreeAddrInfo(struct addrinfo *res) {
     }
 }
 
+/**
+ *  Deallocate name resolution state created by ares_getnameinfo and
+ *  #_AresNameInfoCompletedCallBack.
+ *
+ *  @param[in]  node  A pointer to the null-terminated C string of the
+ *                    resolved host node name for the reverse DNS
+ *                    (that is, address-to-name) request, if present;
+ *                    otherwise, NULL.
+ *  @param[in]  node  A pointer to the null-terminated C string of the
+ *                    resolved service name for the reverse DNS
+ *                    (that is, port-to-name) request, if present;
+ *                    otherwise, NULL.
+ *
+ */
+/* static */ void
+_AresFreeNameInfo(char *node, char *serv) {
+    if (node) free(node);
+    if (serv) free(serv);
+}
+
 /* static */ void
 _CopyHostentAddrToAddrInfo(int family, struct addrinfo *ai, const char *data) {
     struct sockaddr_in *  saddr;
@@ -2030,7 +2063,7 @@ _AresNullLookupPerform(void *info) {
         _AresDestroyRequestAndChannel(ares_request);
     } else if (ares_request->_request_type == kCFHostNames) {
         const int            eai_status = _AresStatusMapToAddrInfoError(ares_request->_request_final_status);
-        FreeNameInfoCallBack free_cb    = NULL;
+        FreeNameInfoCallBack free_cb    = _AresFreeNameInfo;
 
         __CFHostMaybeLog("Finalizing an address-to-names (reverse DNS) lookup...\n");
 
@@ -2040,13 +2073,15 @@ _AresNullLookupPerform(void *info) {
                                      ares_request->_request_host,
                                      free_cb);
 
+        // If present, any storage associated with the resolved node
+        // or service will have been released by the _AresFreeNameInfo
+        // call back. Simply null-out the pointers here.
+
         if (ares_request->_request_resolved_node != NULL) {
-            free(ares_request->_request_resolved_node);
             ares_request->_request_resolved_node = NULL;
         }
 
         if (ares_request->_request_resolved_service != NULL) {
-            free(ares_request->_request_resolved_service);
             ares_request->_request_resolved_service = NULL;
         }
 
