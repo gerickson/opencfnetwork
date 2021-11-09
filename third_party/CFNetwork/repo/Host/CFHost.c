@@ -275,11 +275,6 @@ typedef struct {
                                                     //!< that will be poll/
                                                     //!< select'd for request/
                                                     //!< response activity.
-    Boolean             _request_lookup_is_null;    //!< Indicates whether the
-                                                    //!< _request_lookup is the
-                                                    //!< special "null" (that
-                                                    //!< is, local-only) lookup
-                                                    //!< source.
     CFHostInfoType      _request_type;              //!< The type of data that
                                                     //!< is to be resolved for
                                                     //!< the resolution
@@ -2145,10 +2140,7 @@ _AresNullLookupPerform(void *info) {
  *
  *  @param[in,out]  ares_request  A pointer to the c-ares request
  *                                object for which the "null" lookup
- *                                is to be created. At the successful
- *                                creation of the "null" lookup, the
- *                                field '_request_lookup_is_null' will
- *                                be set to true.
+ *                                is to be created.
  *
  *  @returns
  *    A pointer to the "null" lookup object.
@@ -2174,8 +2166,6 @@ _AresCreateNullLookup(_CFHostAresRequest *ares_request) {
     result = CFRunLoopSourceCreate(allocator, 0, &context);
     __Require(result != NULL, done);
 
-    ares_request->_request_lookup_is_null = TRUE;
-
  done:
     return result;
 }
@@ -2195,13 +2185,9 @@ _AresCreateNullLookup(_CFHostAresRequest *ares_request) {
  */
 /* static */ Boolean
 _AresIsNullLookup(const _CFHostAresRequest *ares_request) {
-#if 0
     const CFTypeID ours   = CFGetTypeID(ares_request->_request_lookup);
     const CFTypeID theirs = CFRunLoopSourceGetTypeID();
     const Boolean  result = (ours == theirs);
-#else
-    const Boolean  result = ares_request->_request_lookup_is_null;
-#endif
 
     return result;
 }
