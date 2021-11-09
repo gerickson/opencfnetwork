@@ -386,6 +386,8 @@ static _CFHostAresRequest *     _AresCreateRequestAndChannel(_CFHost *host, CFHo
 static void                     _AresDestroyRequestAndChannel(_CFHostAresRequest *ares_request);
 static Boolean                  _AresIsNullLookup(const _CFHostAresRequest *ares_request);
 static void                     _AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
+static void                     _AresFinalizeForwardDNSLookup(_CFHostAresRequest *ares_request,
+                                                              int status);
 static void                     _AresFreeAddrInfo(struct addrinfo *res);
 static void                     _AresFreeNameInfo(char *hostname, char *serv);
 static void                     _AresHostByCompletedCallBack(void *arg,
@@ -2028,39 +2030,70 @@ _AresNullLookupCancel(void *info, CFRunLoopRef rl, CFStringRef mode) {
 
 /**
  *  @brief
+ *    This finalizes a c-ares forward DNS (that is, name-to-addresses)
+ *    lookup.
+ *
+ *  In particular, this calls out to any registered client call back
+ *  with the resolved address(es) for the requested host and then
+ *  releases the resources associated with the resolved address(es).
+ *
+ *  @param[in,out]  ares_request  A pointer to the c-ares request
+ *                                object for which the forward DNS
+ *                                lookup is to be finalized. After
+ *                                successful finalization, the
+ *                                resources associated with
+ *                                '_request_name' and
+ *                                '_request_resolved_addrinfo' will be
+ *                                released.
+ *  @param[in]      status        The final c-ares status of the forward
+ *                                DNS lookup.
+ *
+ */
+/* static */ void
+_AresFinalizeForwardDNSLookup(_CFHostAresRequest *ares_request,
+                              int status) {
+    const int            eai_status = _AresStatusMapToAddrInfoError(status);
+    FreeAddrInfoCallBack free_cb    = _AresFreeAddrInfo;
+
+    __CFHostMaybeLog("Finalizing a name-to-addresses (forward DNS) lookup...\n");
+
+    _GetAddrInfoCallBackWithFree(eai_status,
+                                 ares_request->_request_resolved_addrinfo,
+                                 ares_request->_request_host,
+                                 free_cb);
+
+    // Release the buffer that was previously allocated
+    // for the lookup name when the request was made.
+
+    if (ares_request->_request_name != NULL) {
+        CFAllocatorDeallocate(kCFAllocatorDefault,
+                              (void *)ares_request->_request_name);
+        ares_request->_request_name = NULL;
+    }
+}
+
+/**
+ *  @brief
  *    Callback trampoline to perform any work associated with this
  *    CoreFoundation run loop source object.
  *
- *  @param[in]  aContext  A pointer to the C-Ares host request instance that registered this
- *                        trampoline to call back into from
- *                        the trampoline.
+ *  In particular, this handles deferred finalization of c-ares
+ *  forward- and reverse-DNS lookups that c-ares was able to
+ *  "fallthrough" and satisfy without creating a poll/select-able run
+ *  loop source (such as from a cache or a local, host-based file (for
+ *  example, /etc/hosts)
+ *
+ *  @param[in]  info  A pointer to the C-Ares host request instance
+ *                    that registered this run loop source handler.
  *
  */
 static void
 _AresNullLookupPerform(void *info) {
     _CFHostAresRequest *ares_request = (_CFHostAresRequest *)(info);
 
-    __CFHostTraceEnterWithFormat("info %p\n", info);
-
     if (ares_request->_request_type == kCFHostAddresses) {
-        const int            eai_status = _AresStatusMapToAddrInfoError(ares_request->_request_final_status);
-        FreeAddrInfoCallBack free_cb    = _AresFreeAddrInfo;
-
-        __CFHostMaybeLog("Finalizing a name-to-addresses (forward DNS) lookup...\n");
-
-        _GetAddrInfoCallBackWithFree(eai_status,
-                                     ares_request->_request_resolved_addrinfo,
-                                     ares_request->_request_host,
-                                     free_cb);
-
-        // Release the buffer that was previously allocated
-        // for the lookup name when the request was made.
-
-        if (ares_request->_request_name != NULL) {
-            CFAllocatorDeallocate(kCFAllocatorDefault,
-                                  (void *)ares_request->_request_name);
-            ares_request->_request_name = NULL;
-        }
+        _AresFinalizeForwardDNSLookup(ares_request,
+                                      ares_request->_request_final_status);
 
         _AresDestroyRequestAndChannel(ares_request);
     } else if (ares_request->_request_type == kCFHostNames) {
@@ -2260,19 +2293,7 @@ _AresHostByCompletedCallBack(void *arg,
 
             CFRunLoopSourceSignal((CFRunLoopSourceRef)(ares_request->_request_lookup));
         } else {
-            _GetAddrInfoCallBackWithFree(_AresStatusMapToAddrInfoError(final_status),
-                                         ares_request->_request_resolved_addrinfo,
-                                         ares_request->_request_host,
-                                         _AresFreeAddrInfo);
-
-            // Release the buffer that was previously allocated
-            // for the lookup name when the request was made.
-
-            if (ares_request->_request_name != NULL) {
-                CFAllocatorDeallocate(kCFAllocatorDefault,
-                                      (void *)ares_request->_request_name);
-                ares_request->_request_name = NULL;
-            }
+            _AresFinalizeForwardDNSLookup(ares_request, final_status);
         }
     }
 
