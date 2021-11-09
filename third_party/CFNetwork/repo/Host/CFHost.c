@@ -1,4 +1,16 @@
 /*
+ * Copyright (c) 2021 Grant Erickson <gerickson@nuovations.com>. All rights reserved.
+ *
+ * This source code is a modified version of the CFNetwork sources
+ * released by Apple Inc. under the terms of the APSL version 2.0 (see
+ * below).
+ *
+ * For information about changes from the original Apple source
+ * release can be found by reviewing the source control system for the
+ * project at http://github.com/gerickson/opencfnetwork/.
+ *
+ * The original license information is as follows:
+ *
  * Copyright (c) 2005 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
@@ -115,7 +127,11 @@
 #endif
 
 #if !defined(LOG_CFHOST)
-#define LOG_CFHOST 0
+#define LOG_CFHOST      0
+#endif
+
+#if !defined(LOG_CFHOST_LOCK)
+#define LOG_CFHOST_LOCK 0
 #endif
 
 #if LOG_CFHOST
@@ -234,30 +250,55 @@ typedef struct {
  *
  */
 typedef struct {
-    ares_channel        _request_channel;  //!< The c-ares name service
-                                           //!< channel used to initiate
-                                           //!< requests and receive responses.
-    size_t              _request_pending;  //!< The number of channel requests
-    const char *        _request_name;     //!< The lookup name for forward
-                                           //!< DNS (that is, name-to-address)
-                                           //!< requests.
-    CFFileDescriptorRef _request_lookup;   //!< The run loop schedulable
-                                           //!< object that will be poll/
-                                           //!< select'd for request/response
-                                           //!< activity.
-    uint16_t            _request_events;   //!< The poll/select events
-                                           //!< currently desired for
-                                           //!< _request_lookup.
-    CFStreamError *     _request_error;    //!< A pointer to the stream error
-                                           //!< for the most recent request.
-    int                 _request_status;   //!< The stream status for the most
-                                           //!< recent request.
-    struct addrinfo *   _request_addrinfo; //!< A pointer to the synthesized
-                                           //!< and accumulated head-based
-                                           //!< addrinfo as successful request
-                                           //!< responses are processed.
-    _CFHost *           _request_host;     //!< A pointer to the host object
-                                           //!< associated with the request(s).
+    ares_channel        _request_channel;           //!< The c-ares name
+                                                    //!< service channel used
+                                                    //!< to initiate requests
+                                                    //!< and receive responses.
+    size_t              _request_pending;           //!< The number of channel
+                                                    //!< requests outstanding.
+    const char *        _request_name;              //!< The lookup name for
+                                                    //!< forward DNS (that is,
+                                                    //!< name-to-address)
+                                                    //!< requests.
+    char *              _request_resolved_node;     //!< The resolved node name
+                                                    //!< for short-circuited
+                                                    //!< reverse DNS (that is,
+                                                    //!< address-to-name)
+                                                    //!< requests.
+    char *              _request_resolved_service;  //!< The resolved service
+                                                    //!< name for short-
+                                                    //!< circuited reverse DNS
+                                                    //!< (that is, address-to-
+                                                    //!< name) requests.
+    CFTypeRef           _request_lookup;            //!< The run loop
+                                                    //!< schedulable object
+                                                    //!< that will be poll/
+                                                    //!< select'd for request/
+                                                    //!< response activity.
+    CFHostInfoType      _request_type;              //!< The type of data that
+                                                    //!< is to be resolved for
+                                                    //!< the resolution
+                                                    //!< request.
+    uint16_t            _request_events;            //!< The poll/select events
+                                                    //!< currently desired for
+                                                    //!< _request_lookup.
+    CFStreamError *     _request_error;             //!< A pointer to the
+                                                    //!< stream error for the
+                                                    //!< most recent request.
+    int                 _request_last_status;       //!< The stream status for
+                                                    //!< the most recent
+                                                    //!< request.
+    int                 _request_final_status;      //!< The stream status for
+                                                    //!< the final request.
+    struct addrinfo *   _request_resolved_addrinfo; //!< A pointer to the
+                                                    //!< synthesized and
+                                                    //!< accumulated heap-based
+                                                    //!< addrinfo as successful
+                                                    //!< request responses are
+                                                    //!< processed.
+    _CFHost *           _request_host;              //!< A pointer to the host
+                                                    //!< object associated with
+                                                    //!< the request(s).
 } _CFHostAresRequest;
 #endif /* (HAVE_ARES_INIT && 1) */
 #endif /* defined(__linux__) */
@@ -294,6 +335,7 @@ static void                     _GetAddrInfoCallBack(int eai_status, const struc
 #endif
 static void                     _GetAddrInfoCallBackWithFree(int eai_status, const struct addrinfo *res, void *ctxt, FreeAddrInfoCallBack freeaddrinfo_cb);
 static void                     _GetNameInfoCallBackWithFreeAndWithShouldLock(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb, Boolean should_lock);
+static void                     _GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb);
 static void                     _GetNameInfoCallBackWithFree_NoLock(int eai_status, char *hostname, char *serv, _CFHost * host, CFHostClientCallBack *cb, void **info, CFStreamError *error);
 static void                     _HandleGetAddrInfoStatus(int eai_status, CFStreamError* error, Boolean intuitStatus);
 static Boolean                  _HostBlockUntilComplete(_CFHost* host);
@@ -334,12 +376,15 @@ static void                     _AresAccumulateAddrInfo(_CFHostAresRequest *ares
 static void                     _AresClearOrSetRequestEvents(_CFHostAresRequest *ares_request,
                                                              uint16_t event,
                                                              Boolean set);
-static CFTypeRef                _AresCreateNullLookup(void);
-static _CFHostAresRequest *     _AresCreateRequestAndChannel(_CFHost *host, ares_sock_state_cb sock_state_cb, CFStreamError *error);
+static CFRunLoopSourceRef       _AresCreateNullLookup(_CFHostAresRequest *ares_request);
+static _CFHostAresRequest *     _AresCreateRequestAndChannel(_CFHost *host, CFHostInfoType type, ares_sock_state_cb sock_state_cb, CFStreamError *error);
 static void                     _AresDestroyRequestAndChannel(_CFHostAresRequest *ares_request);
-static Boolean                  _AresIsNullLookup(CFTypeRef lookup);
+static Boolean                  _AresIsNullLookup(const _CFHostAresRequest *ares_request);
 static void                     _AresSocketDataCallBack(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
+static void                     _AresFinalizeForwardDNSLookup(_CFHostAresRequest *ares_request,
+                                                              int status);
 static void                     _AresFreeAddrInfo(struct addrinfo *res);
+static void                     _AresFreeNameInfo(char *hostname, char *serv);
 static void                     _AresHostByCompletedCallBack(void *arg,
                                                              int status,
                                                              int timeouts,
@@ -353,10 +398,11 @@ static void                     _AresSocketStateCallBack(void *data, ares_socket
 static int                      _AresStatusMapToAddrInfoError(int ares_status);
 static struct addrinfo * _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error);
 static void                     _AresStatusMapToStreamError(int status, CFStreamError *error);
+static void                     _AresUpdateLastStatus(_CFHostAresRequest *ares_request, int status);
 static void                     _CFHostInitializeAres(void);
 static void                     _CopyHostentAddrToAddrInfo(int family, struct addrinfo *ai, const char *data);
-static CFFileDescriptorRef      _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error);
-static CFFileDescriptorRef      _CreatePrimaryAddressLookup_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
+static CFTypeRef                _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error);
+static CFTypeRef                _CreatePrimaryAddressLookup_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error);
 #if LOG_CFHOST
 static void                     _LogAddress(int aFamily, const char *aData);
 static void                     _LogHostent(const struct hostent *hostent);
@@ -409,6 +455,22 @@ static CFMutableDictionaryRef _HostCache;		/* Cached hostname lookups (successes
 #pragma mark Inline Function Definitions
 #endif
 
+#if LOG_CFHOST_LOCK
+CF_INLINE void _CFHostLockInFunc(_CFHost *host, const char *func) {
+    __CFHostTraceEnterWithFormat("host %p from %s\n", host, func);
+    __CFSpinLock(&(host->_lock));
+    __CFHostTraceExit();
+}
+
+CF_INLINE void _CFHostUnlockInFunc(_CFHost *host, const char *func) {
+    __CFHostTraceEnterWithFormat("host %p from %s\n", host, func);
+    __CFSpinUnlock(&(host->_lock));
+    __CFHostTraceExit();
+}
+
+#define _CFHostLock(host)   do { _CFHostLockInFunc(host, __func__); } while (0)
+#define _CFHostUnlock(host) do { _CFHostUnlockInFunc(host, __func__); } while (0)
+#else
 CF_INLINE void _CFHostLock(_CFHost *host) {
     __CFSpinLock(&(host->_lock));
 }
@@ -416,6 +478,7 @@ CF_INLINE void _CFHostLock(_CFHost *host) {
 CF_INLINE void _CFHostUnlock(_CFHost *host) {
     __CFSpinUnlock(&(host->_lock));
 }
+#endif /* LOG_CFHOST_LOCK */
 
 #if 0
 #pragma mark -
@@ -1516,12 +1579,12 @@ _MaybeReenableRequestCallBacks(_CFHostAresRequest *aRequest) {
 
     if (aRequest->_request_lookup != NULL) {
         if (aRequest->_request_events & POLLIN) {
-            CFFileDescriptorEnableCallBacks(aRequest->_request_lookup,
+            CFFileDescriptorEnableCallBacks((CFFileDescriptorRef)(aRequest->_request_lookup),
                                             kCFFileDescriptorReadCallBack);
         }
 
         if (aRequest->_request_events & POLLOUT) {
-            CFFileDescriptorEnableCallBacks(aRequest->_request_lookup,
+            CFFileDescriptorEnableCallBacks((CFFileDescriptorRef)(aRequest->_request_lookup),
                                             kCFFileDescriptorWriteCallBack);
         }
     }
@@ -1775,6 +1838,26 @@ _AresFreeAddrInfo(struct addrinfo *res) {
     }
 }
 
+/**
+ *  Deallocate name resolution state created by ares_getnameinfo and
+ *  #_AresNameInfoCompletedCallBack.
+ *
+ *  @param[in]  node  A pointer to the null-terminated C string of the
+ *                    resolved host node name for the reverse DNS
+ *                    (that is, address-to-name) request, if present;
+ *                    otherwise, NULL.
+ *  @param[in]  node  A pointer to the null-terminated C string of the
+ *                    resolved service name for the reverse DNS
+ *                    (that is, port-to-name) request, if present;
+ *                    otherwise, NULL.
+ *
+ */
+/* static */ void
+_AresFreeNameInfo(char *node, char *serv) {
+    if (node) free(node);
+    if (serv) free(serv);
+}
+
 /* static */ void
 _CopyHostentAddrToAddrInfo(int family, struct addrinfo *ai, const char *data) {
     struct sockaddr_in *  saddr;
@@ -1914,54 +1997,210 @@ _AresAccumulateAddrInfo(_CFHostAresRequest *ares_request, struct addrinfo *ai) {
     // Point the tail node of the provided list at the last
     // accumulated result.
 
-    tail->ai_next = ares_request->_request_addrinfo;
+    tail->ai_next = ares_request->_request_resolved_addrinfo;
 
     // Point the last accumulated result at the provided list.
 
-    ares_request->_request_addrinfo = ai;
+    ares_request->_request_resolved_addrinfo = ai;
 
  done:
     return;
 }
 
-/**
- *  @brief
- *    Create and return a null lookup object.
- *
- *  This creates and returns a null lookup object to be used when
- *  c-ares is able to "fallthrough" and satisfy a lookup request
- *  without creating a poll/select-able run loop source (such as from
- *  a cache or a local, host-based file (for example, /etc/hosts). The
- *  CFHost common infrastructure expects that every successful lookup
- *  creates a lookup object.
- *
- *  @returns
- *    A pointer to the null lookup object.
- *
- */
-/* static */ CFTypeRef
-_AresCreateNullLookup(void) {
-    // Implementation-wise, we choose to return the special kCFNull
-    // object which is effectively invariant and will not have any
-    // impact by being passed to those methods in CFNetworkSchedule.c.
+static void
+_AresNullLookupCancel(void *info, CFRunLoopRef rl, CFStringRef mode) {
+    _CFHostAresRequest *ares_request = (_CFHostAresRequest *)(info);
 
-    return (CFTypeRef)kCFNull;
+    __CFHostTraceEnterWithFormat("info %p rl %p mode %p\n",
+                                 info, rl, mode);
+
+#if LOG_CFHOST
+    CFShow(mode);
+#endif
+
+    ares_cancel(ares_request->_request_channel);
+
+    __CFHostTraceExit();
 }
 
 /**
- *  Determine whether the specified lookup source is the special null
- *  lookup source.
+ *  @brief
+ *    This finalizes a c-ares forward DNS (that is, name-to-addresses)
+ *    lookup.
  *
- *  @param[in]  lookup  The lookup source to check.
+ *  In particular, this calls out to any registered client call back
+ *  with the resolved address(es) for the requested host and then
+ *  releases the resources associated with the resolved address(es).
+ *
+ *  @param[in,out]  ares_request  A pointer to the c-ares request
+ *                                object for which the forward DNS
+ *                                lookup is to be finalized. After
+ *                                successful finalization, the
+ *                                resources associated with
+ *                                '_request_name' and
+ *                                '_request_resolved_addrinfo' will be
+ *                                released.
+ *  @param[in]      status        The final c-ares status of the forward
+ *                                DNS lookup.
+ *
+ */
+/* static */ void
+_AresFinalizeForwardDNSLookup(_CFHostAresRequest *ares_request,
+                              int status) {
+    const int            eai_status = _AresStatusMapToAddrInfoError(status);
+    FreeAddrInfoCallBack free_cb    = _AresFreeAddrInfo;
+
+    __CFHostMaybeLog("Finalizing a name-to-addresses (forward DNS) lookup...\n");
+
+    _GetAddrInfoCallBackWithFree(eai_status,
+                                 ares_request->_request_resolved_addrinfo,
+                                 ares_request->_request_host,
+                                 free_cb);
+
+    // Release the buffer that was previously allocated
+    // for the lookup name when the request was made.
+
+    if (ares_request->_request_name != NULL) {
+        CFAllocatorDeallocate(kCFAllocatorDefault,
+                              (void *)ares_request->_request_name);
+        ares_request->_request_name = NULL;
+    }
+}
+
+/**
+ *  @brief
+ *    Callback trampoline to perform any work associated with this
+ *    CoreFoundation run loop source object.
+ *
+ *  In particular, this handles deferred finalization of c-ares
+ *  forward- and reverse-DNS lookups that c-ares was able to
+ *  "fallthrough" and satisfy without creating a poll/select-able run
+ *  loop source (such as from a cache or a local, host-based file (for
+ *  example, /etc/hosts)
+ *
+ *  @param[in]  info  A pointer to the C-Ares host request instance
+ *                    that registered this run loop source handler.
+ *
+ */
+static void
+_AresNullLookupPerform(void *info) {
+    _CFHostAresRequest *ares_request = (_CFHostAresRequest *)(info);
+
+    if (ares_request->_request_type == kCFHostAddresses) {
+        _AresFinalizeForwardDNSLookup(ares_request,
+                                      ares_request->_request_final_status);
+
+        _AresDestroyRequestAndChannel(ares_request);
+    } else if (ares_request->_request_type == kCFHostNames) {
+        const int            eai_status = _AresStatusMapToAddrInfoError(ares_request->_request_final_status);
+        FreeNameInfoCallBack free_cb    = _AresFreeNameInfo;
+
+        __CFHostMaybeLog("Finalizing an address-to-names (reverse DNS) lookup...\n");
+
+        _GetNameInfoCallBackWithFree(eai_status,
+                                     ares_request->_request_resolved_node,
+                                     ares_request->_request_resolved_service,
+                                     ares_request->_request_host,
+                                     free_cb);
+
+        // If present, any storage associated with the resolved node
+        // or service will have been released by the _AresFreeNameInfo
+        // call back. Simply null-out the pointers here.
+
+        if (ares_request->_request_resolved_node != NULL) {
+            ares_request->_request_resolved_node = NULL;
+        }
+
+        if (ares_request->_request_resolved_service != NULL) {
+            ares_request->_request_resolved_service = NULL;
+        }
+
+        _AresDestroyRequestAndChannel(ares_request);
+    }
+
+    __CFHostTraceExit();
+}
+
+/**
+ *  @brief
+ *    Create and return a "null" (that is, local-only) lookup object.
+ *
+ *  This creates and returns a "null" (that is, local-only) lookup
+ *  object to be used when c-ares is able to "fallthrough" and satisfy
+ *  a lookup request without creating a poll/select-able run loop
+ *  source (such as from a cache or a local, host-based file (for
+ *  example, /etc/hosts). The CFHost common infrastructure expects
+ *  that every successful lookup creates a lookup object.
+ *
+ *  For such lookups, we create a "null" run loop source and defer
+ *  finalization of such lookups to the source "perform" method such
+ *  that we do not run into a minefield of deadlock issues by trying
+ *  to finalize the lookup within the c-ares
+ *  ares_get{hostbyaddr,nameinfo} callbacks themselves.
+ *
+ *  @param[in,out]  ares_request  A pointer to the c-ares request
+ *                                object for which the "null" lookup
+ *                                is to be created.
  *
  *  @returns
- *    True if @lookup is the special null lookup source; otherwise,
+ *    A pointer to the "null" lookup object.
+ *
+ */
+/* static */ CFRunLoopSourceRef
+_AresCreateNullLookup(_CFHostAresRequest *ares_request) {
+    const CFAllocatorRef   allocator = CFGetAllocator(ares_request->_request_host);
+    CFRunLoopSourceContext context = {
+        0,                       // Version
+        ares_request,            // Info
+        NULL,                    // Retain
+        NULL,                    // Release
+        NULL,                    // Describe
+        NULL,                    // Equal
+        NULL,                    // Hash
+        NULL,                    // Schedule
+        _AresNullLookupCancel,   // Cancel
+        _AresNullLookupPerform   // Perform
+    };
+    CFRunLoopSourceRef     result;
+
+    result = CFRunLoopSourceCreate(allocator, 0, &context);
+    __Require(result != NULL, done);
+
+ done:
+    return result;
+}
+
+/**
+ *  Determine whether the specified lookup source is the special
+ *  "null" lookup source.
+ *
+ *  @param[in]  ares_request  A pointer to the c-ares request object
+ *                            for which to introspect the lookup
+ *                            source.
+ *
+ *  @returns
+ *    True if @lookup is the special "null" lookup source; otherwise,
  *    false.
  *
  */
 /* static */ Boolean
-_AresIsNullLookup(CFTypeRef lookup) {
-    return CFEqual(lookup, kCFNull);
+_AresIsNullLookup(const _CFHostAresRequest *ares_request) {
+    const CFTypeID ours   = CFGetTypeID(ares_request->_request_lookup);
+    const CFTypeID theirs = CFRunLoopSourceGetTypeID();
+    const Boolean  result = (ours == theirs);
+
+    return result;
+}
+
+/* static */ void
+_AresUpdateLastStatus(_CFHostAresRequest *ares_request, int status) {
+    __CFHostMaybeLog("    Last status was %d (%ssuccessful)\n",
+                     ares_request->_request_last_status,
+                     (ares_request->_request_last_status != ARES_SUCCESS) ? "NOT " : "");
+
+    if (ares_request->_request_last_status != ARES_SUCCESS) {
+        ares_request->_request_last_status = status;
+    }
 }
 
 /* static */ void
@@ -1999,7 +2238,7 @@ _AresHostByCompletedCallBack(void *arg,
                 // lookup source.
 
                 if (ares_request->_request_lookup == NULL) {
-                    ares_request->_request_lookup = _AresCreateNullLookup();
+                    ares_request->_request_lookup = _AresCreateNullLookup(ares_request);
                 }
             }
         }
@@ -2017,9 +2256,13 @@ _AresHostByCompletedCallBack(void *arg,
     // release the resources associated with the original lookup.
 
     if (ares_request->_request_pending == 0) {
-        const int last_status = ares_request->_request_status;
-        const int this_status = status;
-        int       final_status;
+        const Boolean  is_null     = _AresIsNullLookup(ares_request);
+        const int      last_status = ares_request->_request_last_status;
+        const int      this_status = status;
+        int            final_status;
+
+        __CFHostMaybeLog("    Concluding host lookup w/ %s lookup...\n",
+                         ((is_null) ? "run loop source" : "descriptor"));
 
         if ((last_status == ARES_SUCCESS) || (this_status == ARES_SUCCESS)) {
             final_status = ARES_SUCCESS;
@@ -2031,24 +2274,16 @@ _AresHostByCompletedCallBack(void *arg,
         // {ares_,}getaddrinfo{,_a} with the derived final lookup
         // status.
 
-        _GetAddrInfoCallBackWithFree(_AresStatusMapToAddrInfoError(final_status),
-                                     ares_request->_request_addrinfo,
-                                     ares_request->_request_host,
-                                     _AresFreeAddrInfo);
+        if (is_null) {
+            ares_request->_request_final_status = final_status;
 
-        // Release the buffer that was previously allocated
-        // for the lookup name when the request was made.
-
-        if (ares_request->_request_name != NULL) {
-            CFAllocatorDeallocate(kCFAllocatorDefault,
-                                  (void *)ares_request->_request_name);
-            ares_request->_request_name = NULL;
+            CFRunLoopSourceSignal((CFRunLoopSourceRef)(ares_request->_request_lookup));
+        } else {
+            _AresFinalizeForwardDNSLookup(ares_request, final_status);
         }
     }
 
-    if (ares_request->_request_status != ARES_SUCCESS) {
-        ares_request->_request_status = status;
-    }
+    _AresUpdateLastStatus(ares_request, status);
 }
 
 /* static */ void
@@ -2077,7 +2312,7 @@ _AresNameInfoCompletedCallBack(void *arg,
                 // lookup source.
 
                 if (ares_request->_request_lookup == NULL) {
-                    ares_request->_request_lookup = _AresCreateNullLookup();
+                    ares_request->_request_lookup = _AresCreateNullLookup(ares_request);
                 }
             }
         }
@@ -2099,46 +2334,52 @@ _AresNameInfoCompletedCallBack(void *arg,
     //
     // Consequently, we need to handle these two cases distinctly and
     // with care. The distinguishing factor will be that the first
-    // case uses the special null lookup and should NOT lock; whereas,
-    // the second case does not and SHOULD lock.
-    //
-    // The _GetNameinfoCallBackWithFree has been reworked with an
-    // expanded API and renamed
-    // _GetNameInfoCallBackWithFreeAndWithShouldLock to take not only
-    // an optional resource deallocation callback but also a Boolean
-    // to indicate whether the host object should be locked within the
-    // function.
-    //
-    // The other nuance we need to deal with in the first case is that
-    // normally host->_lookup will not get assigned until the call to
-    // _CreateNameLookup unwinds in _CreateLookup_NoLock. However, the
-    // down call into _GetNameInfoCallBackWithFreeAndWithShouldLock
-    // (from the Mach legacy code base) assumes host->_lookup has
-    // already been assigned. We will have to manually assign it in
-    // that case.
+    // case uses a run loop source to defer finalization of the lookup
+    // whereas the second case uses a file descriptor source and can
+    // immediately handle finalization of the lookup.
 
     if (ares_request->_request_pending == 0) {
-        const int            eai_status  = _AresStatusMapToAddrInfoError(status);
-        const Boolean        is_null     = _AresIsNullLookup(ares_request->_request_lookup);
-        const Boolean        should_lock = !is_null;
-        _CFHost *            host        = ares_request->_request_host;
-        FreeNameInfoCallBack free_cb     = NULL;
+        const Boolean        is_null     = _AresIsNullLookup(ares_request);
+
+        __CFHostMaybeLog("    Concluding name lookup w/ %s lookup...\n",
+                         ((is_null) ? "run loop source" : "descriptor"));
 
         if (is_null) {
-            ares_request->_request_host->_lookup = ares_request->_request_lookup;
+            // In this deferred finalization path, if we have a
+            // resolved node or service name, duplicate
+            // them. Otherwise, their storage will have gone out of
+            // scope following the conclusion of this callback. The
+            // duplicated copies will be released in
+            // '_AresNullLookupPerform'.
+
+            ares_request->_request_final_status = status;
+
+            if (node != NULL) {
+                ares_request->_request_resolved_node = strdup(node);
+            }
+
+            if (service != NULL) {
+                ares_request->_request_resolved_service = strdup(service);
+            }
+
+            CFRunLoopSourceSignal((CFRunLoopSourceRef)(ares_request->_request_lookup));
+        } else {
+            // In this non-deferred finalization path, the resolved node or
+            // service name storage will be released by c-ares after this
+            // callback scope completes. Simply pass a null resource release
+            // callback to '_GetNameInfoCallBackWithFree'.
+
+            FreeNameInfoCallBack free_cb     = NULL;
+
+            _GetNameInfoCallBackWithFree(_AresStatusMapToAddrInfoError(status),
+                                         node,
+                                         service,
+                                         ares_request->_request_host,
+                                         free_cb);
         }
-
-        _GetNameInfoCallBackWithFreeAndWithShouldLock(eai_status,
-                                                      node,
-                                                      service,
-                                                      host,
-                                                      free_cb,
-                                                      should_lock);
     }
 
-    if (ares_request->_request_status != ARES_SUCCESS) {
-        ares_request->_request_status = status;
-    }
+    _AresUpdateLastStatus(ares_request, status);
 }
 
 /**
@@ -2170,7 +2411,7 @@ _AresNameInfoCompletedCallBack(void *arg,
  *
  */
 /* static */ _CFHostAresRequest *
-_AresCreateRequestAndChannel(_CFHost *host, ares_sock_state_cb sock_state_cb, CFStreamError *error) {
+_AresCreateRequestAndChannel(_CFHost *host, CFHostInfoType type, ares_sock_state_cb sock_state_cb, CFStreamError *error) {
     const int            optmask = ARES_OPT_SOCK_STATE_CB;
     struct ares_options  options;
     int                  status;
@@ -2206,6 +2447,7 @@ _AresCreateRequestAndChannel(_CFHost *host, ares_sock_state_cb sock_state_cb, CF
 
     result->_request_error = error;
     result->_request_host  = host;
+    result->_request_type  = type;
 
  done:
     return result;
@@ -2223,7 +2465,7 @@ _AresDestroyRequestAndChannel(_CFHostAresRequest *ares_request) {
     return;
 }
 
-/* static */ CFFileDescriptorRef
+/* static */ CFTypeRef
 _CreatePrimaryAddressLookup_Ares(CFStringRef name, CFHostInfoType info, CFTypeRef context, CFStreamError* error) {
 	const CFAllocatorRef allocator = CFGetAllocator(name);
 	UInt8*               buffer;
@@ -2241,6 +2483,7 @@ _CreatePrimaryAddressLookup_Ares(CFStringRef name, CFHostInfoType info, CFTypeRe
 	__Require(buffer != NULL, done);
 
 	ares_request = _AresCreateRequestAndChannel((_CFHost *)context,
+                                                kCFHostAddresses,
                                                 _AresSocketStateCallBack,
                                                 error);
 	__Require_Action(ares_request != NULL,
@@ -2490,7 +2733,7 @@ _CreateNameLookup_Mach(CFDataRef address, void* context, CFStreamError* error) {
 
 #if defined(__linux__)
 #if HAVE_ARES_INIT && 1
-/* static */ CFFileDescriptorRef
+/* static */ CFTypeRef
 _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error) {
     const struct sockaddr * sa           = (const struct sockaddr *)CFDataGetBytePtr(address);
     const ares_socklen_t    sa_len       = CFDataGetLength(address);
@@ -2500,6 +2743,7 @@ _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error) {
 
 
     ares_request = _AresCreateRequestAndChannel(host,
+                                                kCFHostNames,
                                                 _AresSocketStateCallBack,
                                                 error);
 	__Require(ares_request != NULL, done);
@@ -2524,8 +2768,8 @@ _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error) {
     // of those cases is a non-success case, handle clean-up
     // appropriately.
 
-    if (ares_request->_request_status != ARES_SUCCESS) {
-        _AresStatusMapToStreamError(ares_request->_request_status, error);
+    if (ares_request->_request_last_status != ARES_SUCCESS) {
+        _AresStatusMapToStreamError(ares_request->_request_last_status, error);
 
         _AresDestroyRequestAndChannel(ares_request);
     } else {
@@ -2536,7 +2780,7 @@ _CreateNameLookup_Ares(CFDataRef address, void* context, CFStreamError* error) {
         // request and channel will be deallocated in the socket state
         // callback.
 
-        if (result == NULL || _AresIsNullLookup(result)) {
+        if (result == NULL) {
             _AresDestroyRequestAndChannel(ares_request);
         }
     }
@@ -2663,7 +2907,9 @@ _CreateDNSLookup_Linux(CFTypeRef thing, CFHostInfoType info, void* context, CFSt
 	__CFHostTraceEnterWithFormat("thing %p info %x context %p error %p\n",
 								 thing, info, context, error);
 
+#if LOG_CFHOST
 	CFShow(thing);
+#endif
 
     // It is not clear that this function is practically reachable as
     // CFHost and CFNetwork are currently implemented. Trigger an
@@ -2976,6 +3222,13 @@ _GetNameInfoCallBackWithFreeAndWithShouldLock(int eai_status, char *hostname, ch
 
 	// Go ahead and release now that the callback is done.
 	CFRelease((CFHostRef)host);
+}
+
+/* static */ void
+_GetNameInfoCallBackWithFree(int eai_status, char *hostname, char *serv, void* ctxt, FreeNameInfoCallBack freenameinfo_cb) {
+    static const Boolean should_lock = TRUE;
+
+    _GetNameInfoCallBackWithFreeAndWithShouldLock(eai_status, hostname, serv, ctxt, freenameinfo_cb, should_lock);
 }
 
 #if defined(__MACH__)

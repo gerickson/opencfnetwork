@@ -2922,7 +2922,8 @@ CFNetServiceCreateDictionaryWithTXTData(CFAllocatorRef alloc, CFDataRef txtRecor
 				char key[256];
 				uint8_t valLen = 0;
 				const void* value = NULL;
-				
+
+#if defined(__MACH__)
 				/* Only go through the other stuff if it could cleanly get the key and value */
 				if (kDNSServiceErr_NoError == TXTRecordGetItemAtIndex(len, txt, i, sizeof(key), key, &valLen, &value)) {
 					
@@ -2944,6 +2945,11 @@ CFNetServiceCreateDictionaryWithTXTData(CFAllocatorRef alloc, CFDataRef txtRecor
 					if (str)
 						CFRelease(str);
 				}
+#elif defined(__linux__)
+#warning "Linux portability issue!"
+#else
+#error "Platform portability issue!"
+#endif /* defined(__MACH__) */
 			}
 		}
 	}
