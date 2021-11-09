@@ -64,7 +64,7 @@
 #define DEMONSTRATE_CFHOST_NAMES_IPV6 1
 
 #define USE_LOCAL_SCOPE_LOOKUPS       1
-#define USE_GLOBAL_SCOPE_LOOKUPS      !USE_LOCAL_SCOPE_LOOKUPS
+#define USE_GLOBAL_SCOPE_LOOKUPS      1
 
 #if !defined(LOG_CFHOSTEXAMPLE)
 #define LOG_CFHOSTEXAMPLE             0
@@ -111,6 +111,20 @@ static const _CFHostExampleLookups sGlobalScopeLookups = {
     "2001:4860:4860::8888"
 };
 #endif // USE_GLOBAL_SCOPE_LOOKUPS
+
+static const _CFHostExampleLookups * sLookups[] = {
+#if USE_LOCAL_SCOPE_LOOKUPS
+    &sLocalScopeLookups,
+#endif // USE_LOCAL_SCOPE_LOOKUPS
+#if USE_GLOBAL_SCOPE_LOOKUPS
+    &sGlobalScopeLookups,
+#endif // USE_GLOBAL_SCOPE_LOOKUPS
+    NULL
+};
+
+#if (!USE_LOCAL_SCOPE_LOOKUPS && !USE_GLOBAL_SCOPE_LOOKUPS)
+#error "Choose one or both of USE_LOCAL_SCOPE_LOOKUPS or USE_GLOBAL_SCOPE_LOOKUPS."
+#endif // (!USE_LOCAL_SCOPE_LOOKUPS && !USE_GLOBAL_SCOPE_LOOKUPS)
 
 static void
 LogResolutionStatus(Boolean aResolved, const char *aWhat)
@@ -324,7 +338,7 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
     int                 status = -1;
 
     type = CFGetTypeID(aHost);
-    __Require_Action(type == CFHostGetTypeID(), done, status = -1);
+    __Require_Action(type == CFHostGetTypeID(), done, status = -EINVAL);
 
     // There are two hallmarks of a synchronous versus asynchronous
     // lookup: setting a client callback is one of them, starting and
@@ -376,7 +390,7 @@ DemonstrateHostByName(const char *name, Boolean *aAsync)
     CFHostRef           host = NULL;
     int                 status = -1;
 
-    __CFHostExampleLog("By name '%s' (DNS)...\n", name);
+    __CFHostExampleLog("By name '%s' (Forward DNS)...\n", name);
 
     string = CFStringCreateWithCString(kCFAllocatorDefault,
                                        name,
@@ -438,10 +452,10 @@ DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, si
     addressData = CFDataCreate(kCFAllocatorDefault,
                                (const UInt8 *)address,
                                length);
-    __Require_Action(addressData != NULL, done, status = -1);
+    __Require_Action(addressData != NULL, done, status = -ENOMEM);
 
     host = CFHostCreateWithAddress(kCFAllocatorDefault, addressData);
-    __Require_Action(host != NULL, done, status = -1);
+    __Require_Action(host != NULL, done, status = -ENOMEM);
 
     status = DemonstrateHostCommon(host, kCFHostNames, aAsync);
     __Require(status == 0, done);
@@ -527,45 +541,43 @@ DemonstrateHost(const _CFHostExampleLookups *lookups, Boolean *aAsync)
     return (result);
 }
 
-static const _CFHostExampleLookups *
+static const _CFHostExampleLookups **
 GetLookups(void)
 {
-    const _CFHostExampleLookups * lookups;
-
-#if USE_LOCAL_SCOPE_LOOKUPS
-    lookups = &sLocalScopeLookups;
-#elif USE_GLOBAL_SCOPE_LOOKUPS
-    lookups = &sGlobalScopeLookups;
-#else
-#error "Choose one of USE_LOCAL_SCOPE_LOOKUPS or USE_GLOBAL_SCOPE_LOOKUPS."
-#endif
-
-    return (lookups);
+    return (&sLookups[0]);
 }
 
 int
 main(void)
 {
+    const _CFHostExampleLookups **lookups = NULL;
     Boolean async;
     int     status;
 
+    lookups = GetLookups();
+
+    while ((lookups != NULL) && (*lookups != NULL))
+    {
 #if DEMONSTRATE_CFHOST_SYNC
-    // Synchronous (blocking)
+        // Synchronous (blocking)
 
-    async = FALSE;
+        async = FALSE;
 
-    status = DemonstrateHost(GetLookups(), &async);
-    __Require(status == 0, done);
+        status = DemonstrateHost(*lookups, &async);
+        __Require(status == 0, done);
 #endif // DEMONSTRATE_CFHOST_SYNC
 
 #if DEMONSTRATE_CFHOST_ASYNC
-    // Asynchronous (non-blocking)
+        // Asynchronous (non-blocking)
 
-    async = TRUE;
+        async = TRUE;
 
-    status = DemonstrateHost(GetLookups(), &async);
-    __Require(status == 0, done);
+        status = DemonstrateHost(*lookups, &async);
+        __Require(status == 0, done);
 #endif // DEMONSTRATE_CFHOST_ASYNC
+
+        lookups++;
+    }
 
  done:
     return ((status == 0) ? EXIT_SUCCESS : EXIT_FAILURE);
