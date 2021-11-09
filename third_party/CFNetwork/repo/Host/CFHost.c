@@ -2348,23 +2348,9 @@ _AresNameInfoCompletedCallBack(void *arg,
     //
     // Consequently, we need to handle these two cases distinctly and
     // with care. The distinguishing factor will be that the first
-    // case uses the special null lookup and should NOT lock; whereas,
-    // the second case does not and SHOULD lock.
-    //
-    // The _GetNameinfoCallBackWithFree has been reworked with an
-    // expanded API and renamed
-    // _GetNameInfoCallBackWithFreeAndWithShouldLock to take not only
-    // an optional resource deallocation callback but also a Boolean
-    // to indicate whether the host object should be locked within the
-    // function.
-    //
-    // The other nuance we need to deal with in the first case is that
-    // normally host->_lookup will not get assigned until the call to
-    // _CreateNameLookup unwinds in _CreateLookup_NoLock. However, the
-    // down call into _GetNameInfoCallBackWithFreeAndWithShouldLock
-    // (from the Mach legacy code base) assumes host->_lookup has
-    // already been assigned. We will have to manually assign it in
-    // that case.
+    // case uses a run loop source to defer finalization of the lookup
+    // whereas the second case uses a file descriptor source and can
+    // immediately handle finalization of the lookup.
 
     if (ares_request->_request_pending == 0) {
         const Boolean        is_null     = _AresIsNullLookup(ares_request);
@@ -2373,10 +2359,12 @@ _AresNameInfoCompletedCallBack(void *arg,
                          ((is_null) ? "run loop source" : "descriptor"));
 
         if (is_null) {
-            // In this deferred finalization path, if we have a resolved node
-            // or service name, duplicate them. Otherwise, their storage will
-            // have gone out of scope following the conclusion of this callback. 
-            // The duplicated copies will be released in '_AresNullLookupPerform'.
+            // In this deferred finalization path, if we have a
+            // resolved node or service name, duplicate
+            // them. Otherwise, their storage will have gone out of
+            // scope following the conclusion of this callback. The
+            // duplicated copies will be released in
+            // '_AresNullLookupPerform'.
 
             ares_request->_request_final_status = status;
 
