@@ -82,6 +82,9 @@
 	the master lookup will be canceled and removed from the master lookups list.
 */
 
+#define DEBUG 1
+#define NDEBUG 0
+
 
 #if 0
 #pragma mark -
@@ -1882,6 +1885,14 @@ _CopyHostentAddrToAddrInfo(int family, struct addrinfo *ai, const char *data) {
     }
 }
 
+CF_INLINE size_t
+_AresHostentGetCanonnameLength(const struct hostent *hostent) {
+    static const char kNull  = '\0';
+    const size_t      result = ((hostent->h_name == NULL) ? 0 : strlen(hostent->h_name) + sizeof(kNull));
+
+    return result;
+}
+
 /* static */ struct addrinfo *
 _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
     int               i;
@@ -1892,7 +1903,6 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
     struct addrinfo * current  = NULL;
 
     __Require_Action(hostent != NULL, map_status, status = EINVAL);
-    __Require_Action(hostent->h_name != NULL, map_status, status = EINVAL);
     __Require_Action(hostent->h_addr_list != NULL, map_status, status = EINVAL);
     __Require_Action(error != NULL, map_status, status = EINVAL);
 
@@ -1901,9 +1911,8 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
 
     for (i = 0; ((data = hostent->h_addr_list[i]) != NULL); i++)
     {
-        const char   kNull         = '\0';
         const int    family        = hostent->h_addrtype;
-        const size_t canonname_len = strlen(hostent->h_name) + sizeof(kNull);
+        const size_t canonname_len = _AresHostentGetCanonnameLength(hostent);
         size_t       addr_size;
         size_t       total_size;
 
