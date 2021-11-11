@@ -90,17 +90,38 @@
 #define __CFHostExampleTraceExit()                                     \
     __CFHostExampleTraceExitWithFormat("\n")
 
+// Type Declarations
+
 typedef struct {
-    const char * mLookupName;
-    const char * mLookupIPv4Address;
-    const char * mLookupIPv6Address;
+    Boolean       mAsync;
+    CFStreamError mStreamError;
+} _CFHostExampleContext;
+
+typedef struct {
+    const char *   mLookupName;
+    const char *   mLookupIPv4Address;
+    const char *   mLookupIPv6Address;
 } _CFHostExampleLookups;
 
+// Global Variables
+
 #if USE_LOCAL_SCOPE_LOOKUPS
-static const _CFHostExampleLookups sLocalScopeLookups = {
+static const _CFHostExampleLookups sNameAndAddressLocalScopeLookups = {
     "localhost",
     "127.0.0.1",
     "::1"
+};
+
+static const _CFHostExampleLookups sIPv4NumericHostLocalScopeLookups = {
+    "127.0.0.1",
+    NULL,
+    NULL
+};
+
+static const _CFHostExampleLookups sIPv6NumericHostLocalScopeLookups = {
+    "::1",
+    NULL,
+    NULL
 };
 #endif // USE_LOCAL_SCOPE_LOOKUPS
 
@@ -114,7 +135,9 @@ static const _CFHostExampleLookups sGlobalScopeLookups = {
 
 static const _CFHostExampleLookups * sLookups[] = {
 #if USE_LOCAL_SCOPE_LOOKUPS
-    &sLocalScopeLookups,
+    &sNameAndAddressLocalScopeLookups,
+    &sIPv4NumericHostLocalScopeLookups,
+    &sIPv6NumericHostLocalScopeLookups,
 #endif // USE_LOCAL_SCOPE_LOOKUPS
 #if USE_GLOBAL_SCOPE_LOOKUPS
     &sGlobalScopeLookups,
@@ -125,6 +148,21 @@ static const _CFHostExampleLookups * sLookups[] = {
 #if (!USE_LOCAL_SCOPE_LOOKUPS && !USE_GLOBAL_SCOPE_LOOKUPS)
 #error "Choose one or both of USE_LOCAL_SCOPE_LOOKUPS or USE_GLOBAL_SCOPE_LOOKUPS."
 #endif // (!USE_LOCAL_SCOPE_LOOKUPS && !USE_GLOBAL_SCOPE_LOOKUPS)
+
+static void
+LogHostExampleError(const CFStreamError *aError)
+{
+    __CFHostExampleLog("Resolution failed with stream error %ld.%d",
+                       aError->domain, aError->error);
+
+    if (aError->domain == kCFStreamErrorDomainPOSIX)
+    {
+        __CFHostExampleLog(": %s", strerror(aError->error));
+    }
+
+    __CFHostExampleLog("\n");
+}
+
 
 static void
 LogResolutionStatus(Boolean aResolved, const char *aWhat)
@@ -261,21 +299,26 @@ GetAndLogAddressesAndNames(CFHostRef aHost, Boolean aAsync)
 static void
 HostCallBack(CFHostRef aHost, CFHostInfoType aInfo, const CFStreamError *aError, void * aContext)
 {
-    Boolean *   async = ((Boolean *)(aContext));
+    _CFHostExampleContext *lContext = ((_CFHostExampleContext *)(aContext));
 
     if (aError->error == 0) {
         if (aInfo == kCFHostAddresses) {
-            GetAndLogAddresses(aHost, *async);
+            GetAndLogAddresses(aHost, lContext->mAsync);
 
         } else if (aInfo == kCFHostNames) {
-            GetAndLogNames(aHost, *async);
+            GetAndLogNames(aHost, lContext->mAsync);
 
         }
     } else {
-        __CFHostExampleLog("Resolution failed with error %d.%ld\n",
-                           aError->error, aError->domain);
+        LogHostExampleError(aError);
 
-        if (*async) {
+        if (&lContext->mStreamError != aError)
+        {
+            lContext->mStreamError.error = aError->error;
+            lContext->mStreamError.domain = aError->domain;
+        }
+
+        if (lContext->mAsync) {
             CFRunLoopStop(CFRunLoopGetCurrent());
         }
     }
@@ -284,7 +327,7 @@ HostCallBack(CFHostRef aHost, CFHostInfoType aInfo, const CFStreamError *aError,
 }
 
 static Boolean
-StartResolution(CFHostRef aHost, CFHostInfoType aInfo, CFStreamError *aError, Boolean aAsync)
+StartResolution(CFHostRef aHost, CFHostInfoType aInfo, _CFHostExampleContext *aContext)
 {
     Boolean       result;
 
@@ -295,11 +338,11 @@ StartResolution(CFHostRef aHost, CFHostInfoType aInfo, CFStreamError *aError, Bo
     // If the operation is asynchronous, schedule the host for run
     // loop operation.
 
-    if (aAsync) {
+    if (aContext->mAsync) {
         CFHostScheduleWithRunLoop(aHost, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
     }
 
-    result = CFHostStartInfoResolution(aHost, aInfo, aError);
+    result = CFHostStartInfoResolution(aHost, aInfo, &aContext->mStreamError);
     __Require(result, done);
 
     // There are two hallmarks of a synchronous versus asynchronous
@@ -308,7 +351,7 @@ StartResolution(CFHostRef aHost, CFHostInfoType aInfo, CFStreamError *aError, Bo
     //
     // If the operation is asynchronous, start the run loop.
 
-    if (aAsync) {
+    if (aContext->mAsync) {
         CFRunLoopRun();
     }
 
@@ -320,7 +363,7 @@ StartResolution(CFHostRef aHost, CFHostInfoType aInfo, CFStreamError *aError, Bo
     // If the operation is asynchronous, unschedule the host from run
     // loop operation.
 
-    if (aAsync) {
+    if (aContext->mAsync) {
         CFHostUnscheduleFromRunLoop(aHost, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
     }
 
@@ -328,10 +371,10 @@ StartResolution(CFHostRef aHost, CFHostInfoType aInfo, CFStreamError *aError, Bo
 }
 
 static int
-DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
+DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, _CFHostExampleContext *aContext)
 {
     CFTypeID            type;
-    CFHostClientContext context = { 0, aAsync, NULL, NULL, NULL };
+    CFHostClientContext context = { 0, aContext, NULL, NULL, NULL };
     Boolean             set;
     Boolean             started;
     CFStreamError       error  = { 0, 0 };
@@ -347,14 +390,14 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
     // If the operation is asynchronous, set the asynchronous client
     // callback.
 
-    if (*aAsync == TRUE) {
+    if (aContext->mAsync == TRUE) {
         set = CFHostSetClient(aHost, HostCallBack, &context);
         __Require_Action(set, done, status = -1);
     }
 
     GetAndLogAddressesAndNames(aHost, FALSE);
 
-    started = StartResolution(aHost, aInfo, &error, *aAsync);
+    started = StartResolution(aHost, aInfo, aContext);
     __Require_Action(started, done, status = -1);
 
     status = 0;
@@ -367,15 +410,14 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
     // If the operation is asynchronous, clear the asynchronous client
     // callback.
 
-    if (*aAsync == TRUE) {
+    if (aContext->mAsync == TRUE) {
         set = CFHostSetClient(aHost, NULL, NULL);
         __Require_Action(set, done, status = -1);
     }
 
     if (status != 0) {
         if (error.error != 0) {
-            __CFHostExampleLog("Resolution failed with error %d.%ld\n",
-                               error.error, error.domain);
+            LogHostExampleError(&error);
         }
     }
 
@@ -384,7 +426,7 @@ DemonstrateHostCommon(CFHostRef aHost, CFHostInfoType aInfo, Boolean *aAsync)
 
 #if DEMONSTRATE_CFHOST_ADDRESSES
 static int
-DemonstrateHostByName(const char *name, Boolean *aAsync)
+DemonstrateHostByName(const char *name, _CFHostExampleContext *aContext)
 {
     CFStringRef         string = NULL;
     CFHostRef           host = NULL;
@@ -400,7 +442,7 @@ DemonstrateHostByName(const char *name, Boolean *aAsync)
     host = CFHostCreateWithName(kCFAllocatorDefault, string);
     __Require_Action(host != NULL, done, status = -ENOMEM);
 
-    status = DemonstrateHostCommon(host, kCFHostAddresses, aAsync);
+    status = DemonstrateHostCommon(host, kCFHostAddresses, aContext);
     __Require(status == 0, done);
 
  done:
@@ -414,7 +456,7 @@ DemonstrateHostByName(const char *name, Boolean *aAsync)
 
 #if DEMONSTRATE_CFHOST_NAMES
 static int
-DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, size_t length, Boolean *aAsync)
+DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, size_t length, _CFHostExampleContext *aContext)
 {
     const int           family = address->sa_family;
     void *              ia;
@@ -457,7 +499,7 @@ DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, si
     host = CFHostCreateWithAddress(kCFAllocatorDefault, addressData);
     __Require_Action(host != NULL, done, status = -ENOMEM);
 
-    status = DemonstrateHostCommon(host, kCFHostNames, aAsync);
+    status = DemonstrateHostCommon(host, kCFHostNames, aContext);
     __Require(status == 0, done);
 
  done:
@@ -474,7 +516,7 @@ DemonstrateHostByAddress(const char *addressString, struct sockaddr *address, si
 
 #if DEMONSTRATE_CFHOST_NAMES_IPV4
 static int
-DemonstrateHostByAddressIPv4(const char *aAddressString, Boolean *aAsync)
+DemonstrateHostByAddressIPv4(const char *aAddressString, _CFHostExampleContext *aContext)
 {
     struct sockaddr_in  address;
     int                 status = -1;
@@ -486,7 +528,7 @@ DemonstrateHostByAddressIPv4(const char *aAddressString, Boolean *aAsync)
     status = DemonstrateHostByAddress(aAddressString,
                                       (struct sockaddr *)&address,
                                       sizeof (struct sockaddr_in),
-                                      aAsync);
+                                      aContext);
 
     return (status);
 }
@@ -494,7 +536,7 @@ DemonstrateHostByAddressIPv4(const char *aAddressString, Boolean *aAsync)
 
 #if DEMONSTRATE_CFHOST_NAMES_IPV6
 static int
-DemonstrateHostByAddressIPv6(const char *aAddressString, Boolean *aAsync)
+DemonstrateHostByAddressIPv6(const char *aAddressString, _CFHostExampleContext *aContext)
 {
     struct sockaddr_in6 address;
     int                 status = -1;
@@ -506,7 +548,7 @@ DemonstrateHostByAddressIPv6(const char *aAddressString, Boolean *aAsync)
     status = DemonstrateHostByAddress(aAddressString,
                                       (struct sockaddr *)&address,
                                       sizeof (struct sockaddr_in6),
-                                      aAsync);
+                                      aContext);
 
     return (status);
 }
@@ -514,26 +556,35 @@ DemonstrateHostByAddressIPv6(const char *aAddressString, Boolean *aAsync)
 #endif // DEMONSTRATE_CFHOST_NAMES
 
 static int
-DemonstrateHost(const _CFHostExampleLookups *lookups, Boolean *aAsync)
+DemonstrateHost(const _CFHostExampleLookups *lookups, _CFHostExampleContext *aContext)
 {
     int result;
 
-    __CFHostExampleLog("%synchronous lookups...\n", *aAsync ? "As" : "S");
+    __CFHostExampleLog("%synchronous lookups...\n", aContext->mAsync ? "As" : "S");
 
 #if DEMONSTRATE_CFHOST_ADDRESSES
-    result = DemonstrateHostByName(lookups->mLookupName, aAsync);
-    __Require(result == 0, done);
+    if (lookups->mLookupName != NULL)
+    {
+        result = DemonstrateHostByName(lookups->mLookupName, aContext);
+        __Require(result == 0, done);
+    }
 #endif
 
 #if DEMONSTRATE_CFHOST_NAMES
 #if DEMONSTRATE_CFHOST_NAMES_IPV4
-    result = DemonstrateHostByAddressIPv4(lookups->mLookupIPv4Address, aAsync);
-    __Require(result == 0, done);
+    if (lookups->mLookupIPv4Address != NULL)
+    {
+        result = DemonstrateHostByAddressIPv4(lookups->mLookupIPv4Address, aContext);
+        __Require(result == 0, done);
+    }
 #endif // DEMONSTRATE_CFHOST_NAMES_IPV4
 
 #if DEMONSTRATE_CFHOST_NAMES_IPV6
-    result = DemonstrateHostByAddressIPv6(lookups->mLookupIPv6Address, aAsync);
-    __Require(result == 0, done);
+    if (lookups->mLookupIPv6Address != NULL)
+    {
+        result = DemonstrateHostByAddressIPv6(lookups->mLookupIPv6Address, aContext);
+        __Require(result == 0, done);
+    }
 #endif // DEMONSTRATE_CFHOST_NAMES_IPV6
 #endif // DEMONSTRATE_CFHOST_NAMES
 
@@ -551,7 +602,7 @@ int
 main(void)
 {
     const _CFHostExampleLookups **lookups = NULL;
-    Boolean async;
+    _CFHostExampleContext context = { FALSE, { 0, 0 } };
     int     status;
 
     lookups = GetLookups();
@@ -561,19 +612,31 @@ main(void)
 #if DEMONSTRATE_CFHOST_SYNC
         // Synchronous (blocking)
 
-        async = FALSE;
+        context.mAsync = FALSE;
 
-        status = DemonstrateHost(*lookups, &async);
+        status = DemonstrateHost(*lookups, &context);
         __Require(status == 0, done);
+
+        if (context.mStreamError.error != 0)
+        {
+            status = -1;
+            break;
+        }
 #endif // DEMONSTRATE_CFHOST_SYNC
 
 #if DEMONSTRATE_CFHOST_ASYNC
         // Asynchronous (non-blocking)
 
-        async = TRUE;
+        context.mAsync = TRUE;
 
-        status = DemonstrateHost(*lookups, &async);
+        status = DemonstrateHost(*lookups, &context);
         __Require(status == 0, done);
+
+        if (context.mStreamError.error != 0)
+        {
+            status = -1;
+            break;
+        }
 #endif // DEMONSTRATE_CFHOST_ASYNC
 
         lookups++;
