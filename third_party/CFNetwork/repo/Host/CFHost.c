@@ -1955,7 +1955,9 @@ _AresHostentToAddrInfo(const struct hostent *hostent, CFStreamError *error) {
         current->ai_socktype = SOCK_STREAM;
         current->ai_addrlen  = addr_size;
 
-        memcpy(current->ai_canonname, hostent->h_name, canonname_len);
+        if ((hostent->h_name != NULL) && (canonname_len > 0)) {
+            memcpy(current->ai_canonname, hostent->h_name, canonname_len);
+        }
 
         // Copy the actual address data from the current hostent
         // address to the addrinfo socket address.
