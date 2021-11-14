@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: gerickson/opencflite
-          ref: opencflite-476
+          ref: opencflite-635
           path: opencflite
 
       # Note that in Ubuntu 20 and later, with ICU 60 and later, neither
