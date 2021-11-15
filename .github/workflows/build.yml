@@ -33,6 +33,7 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     name: "Linux ${{matrix.compiler['name']}}"
+
     strategy:
       matrix:
         compiler:
@@ -40,70 +41,98 @@ jobs:
     env:
       CC: ${{matrix.compiler['c']}}
       CXX: ${{matrix.compiler['cxx']}}
+
     steps:
-      - name: Install Common Host Package Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install autoconf automake libtool
 
-      - name: Install OpenCFLite Host Package Dependencies
-        run: |
-          sudo apt-get -y install gobjc gobjc++ uuid-dev libicu-dev
+    - name: Install Common Host Package Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install autoconf automake libtool
 
-      - name: Install OpenCFNetwork Host Package Dependencies
-        run: |
-          sudo apt-get -y install libavahi-compat-libdnssd-dev libc-ares-dev
+    - name: Install OpenCFLite Host Package Dependencies
+      run: |
+        sudo apt-get -y install gobjc gobjc++ uuid-dev libicu-dev
 
-      - name: Download OpenCFLite Distribution Archive Dependencies
-        run: |
-          cd /tmp
-          curl https://data.iana.org/time-zones/releases/tzcode2021a.tar.gz -o tzcode2021a.tar.gz || wget https://data.iana.org/time-zones/releases/tzcode2021a.tar.gz
-          mkdir tzcode2021a
-          tar --directory tzcode2021a -zxf tzcode2021a.tar.gz
+    - name: Install OpenCFNetwork Host Package Dependencies
+      run: |
+        sudo apt-get -y install libavahi-compat-libdnssd-dev libc-ares-dev
 
-      - name: Checkout OpenCFLite Dependency
-        uses: actions/checkout@v2
-        with:
-          repository: gerickson/opencflite
-          ref: opencflite-476
-          path: opencflite
+    - name: Download OpenCFLite Distribution Archive Dependencies
+      run: |
+        cd /tmp
+        curl https://data.iana.org/time-zones/releases/tzcode2021a.tar.gz -o tzcode2021a.tar.gz || wget https://data.iana.org/time-zones/releases/tzcode2021a.tar.gz
+        mkdir tzcode2021a
+        tar --directory tzcode2021a -zxf tzcode2021a.tar.gz
 
-      # Note that in Ubuntu 20 and later, with ICU 60 and later, neither
-      # 'pkg-config icu' nor 'icu-config' are supported. Consequently,
-      # we have to explicitly specify '--with-icu=/usr'.
-      #
-      # For this build, we also need neither debug nor profile instances.
+    - name: Checkout libkqueue OpenCFLite v635 Dependency
+      uses: actions/checkout@v2
+      with:
+        repository: mheily/libkqueue
+        ref: master
+        path: libkqueue
 
-      - name: Configure OpenCFLite Dependency
-        run: |
-          cd "${GITHUB_WORKSPACE}/opencflite"
-          ./configure -C --with-icu=/usr --with-tz-includes=/tmp/tzcode2021a --disable-debug --disable-profile
+    - name: Configure libkqueue OpenCFLite v635 Dependency
+      run: |
+        cd "${GITHUB_WORKSPACE}/libkqueue"
+        cmake -S. -B. -G "Unix Makefiles" \
+          -DCMAKE_INSTALL_PREFIX="/usr" \
+          -DCMAKE_INSTALL_LIBDIR="lib"
 
-      - name: Build OpenCFLite Dependency
-        run: |
-          cd "${GITHUB_WORKSPACE}/opencflite"
-          make -j
+    - name: Build libkqueue OpenCFLite v635 Dependency
+      run: |
+        cd "${GITHUB_WORKSPACE}/libkqueue"
+        make -j
 
-      # Make sure that 'ldconfig' is run such that run time execution
-      # picks up libCoreFoundation.so.476 in /usr/local.
+    - name: Install libkqueue OpenCFLite v635 Dependency
+      run: |
+        cd "${GITHUB_WORKSPACE}/libkqueue"
+        sudo make install
+        sudo ldconfig
 
-      - name: Install OpenCFLite Dependency
-        run: |
-          cd "${GITHUB_WORKSPACE}/opencflite"
-          sudo make install
-          sudo ldconfig
+    - name: Checkout OpenCFLite Dependency
+      uses: actions/checkout@v2
+      with:
+        repository: gerickson/opencflite
+        ref: opencflite-635
+        path: opencflite
 
-      - name: Checkout
-        uses: actions/checkout@v2
+    # Note that in Ubuntu 20 and later, with ICU 60 and later, neither
+    # 'pkg-config icu' nor 'icu-config' are supported. Consequently,
+    # we have to explicitly specify '--with-icu=/usr'.
+    #
+    # For this build, we also need neither debug nor profile instances.
 
-      - name: Configure
-        run: |
-          ./configure -C ${{matrix.compiler['options']}}
+    - name: Configure OpenCFLite Dependency
+      run: |
+        cd "${GITHUB_WORKSPACE}/opencflite"
+        ./configure -C --with-icu=/usr --with-tz-includes=/tmp/tzcode2021a --disable-debug --disable-profile
 
-      - name: Build
-        run: |
-          make -j
+    - name: Build OpenCFLite Dependency
+      run: |
+        cd "${GITHUB_WORKSPACE}/opencflite"
+        make -j
 
-      - name: Test
-        run: |
-          make -j distcheck
+    # Make sure that 'ldconfig' is run such that run time execution
+    # picks up libCoreFoundation.so in /usr/local.
+
+    - name: Install OpenCFLite Dependency
+      run: |
+        cd "${GITHUB_WORKSPACE}/opencflite"
+        sudo make install
+        sudo ldconfig
+
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Configure
+      run: |
+        ./configure -C ${{matrix.compiler['options']}}
+
+
+    - name: Build
+      run: |
+        make -j
+
+    - name: Test
+      run: |
+        make -j check
