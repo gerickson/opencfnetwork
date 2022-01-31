@@ -3096,17 +3096,17 @@ _SocketStreamCreateSocket_NoLock(_CFSocketStreamContext* ctxt, CFDataRef address
 			
 			if (CFDictionaryContainsValue(info, _kCFStreamSocketFamily)) {
 				const void* tmp = CFDictionaryGetValue(info, _kCFStreamSocketFamily);
-				protocolFamily = (SInt32)tmp;
+				protocolFamily = (SInt32)((intptr_t)tmp);
 			}
 			
 			if (CFDictionaryContainsValue(info, _kCFStreamSocketType)) {
 				const void* tmp = CFDictionaryGetValue(info, _kCFStreamSocketType);
-				socketType = (SInt32)tmp;
+				socketType = (SInt32)((intptr_t)tmp);
 			}
 			
 			if (CFDictionaryContainsValue(info, _kCFStreamSocketProtocol)) {
 				const void* tmp = CFDictionaryGetValue(info, _kCFStreamSocketProtocol);
-				protocol = (SInt32)tmp;
+				protocol = (SInt32)((intptr_t)tmp);
 			}
 		}
 		
