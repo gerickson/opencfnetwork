@@ -2100,7 +2100,7 @@ _NetServiceCallBack(CFNetServiceRef theService, CFStreamError* error, _CFSocketS
 	if (ctxt->_error.error) {
 		
 		/* Copy the error for notification. */
-		memmove(&ctxt->_error, error, sizeof(error));
+		memmove(&ctxt->_error, error, sizeof(error[0]));
 		
 		/* Grab the client streams for error notification. */
 		if (ctxt->_clientReadStream && __CFBitIsSet(ctxt->_flags, kFlagBitReadStreamOpened))
