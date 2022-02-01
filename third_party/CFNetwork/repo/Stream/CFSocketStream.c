@@ -65,6 +65,29 @@
 #pragma mark Constants
 #endif
 
+#if !defined(LOG_CFSOCKETSTREAM)
+#define LOG_CFSOCKETSTREAM      0
+#endif
+
+#define __CFSocketStreamLog(format, ...)       do { fprintf(stderr, format, ##__VA_ARGS__); fflush(stderr); } while (0)
+
+#if LOG_CFSOCKETSTREAM
+#define __CFSocketStreamMaybeLog(format, ...)  __CFSocketStreamLog(format, ##__VA_ARGS__)
+#else
+#define __CFSocketStreamMaybeLog(format, ...)
+#endif
+
+#define __CFSocketStreamMaybeTraceWithFormat(dir, name, format, ...)	\
+	__CFSocketStreamMaybeLog(dir " %s" format, name, ##__VA_ARGS__)
+#define __CFSocketStreamTraceEnterWithFormat(format, ...)             \
+	__CFSocketStreamMaybeTraceWithFormat("-->", __func__, " " format, ##__VA_ARGS__)
+#define __CFSocketStreamTraceExitWithFormat(format, ...)              \
+	__CFSocketStreamMaybeTraceWithFormat("<--", __func__, " " format, ##__VA_ARGS__)
+#define __CFSocketStreamTraceEnter()                                  \
+	__CFSocketStreamTraceEnterWithFormat("\n")
+#define __CFSocketStreamTraceExit()                                   \
+	__CFSocketStreamTraceExitWithFormat("\n")
+
 #define kSocketEvents ((CFOptionFlags)(kCFSocketReadCallBack | kCFSocketConnectCallBack | kCFSocketWriteCallBack))
 #define kReadWriteTimeoutInterval ((CFTimeInterval)75.0)
 #define kRecvBufferSize		((CFIndex)(32768L));
@@ -432,6 +455,8 @@ static void _SocketStreamBufferedSocketRead_NoLock(_CFSocketStreamContext* ctxt)
 static void _SocketStreamPerformCancel(void* info);
 
 CF_INLINE SInt32 _LastError(CFStreamError* error) {
+
+    __CFSocketStreamTraceEnterWithFormat("error %p\n", error);
 	
 	error->domain = _kCFStreamErrorDomainNativeSockets;
 	
@@ -444,7 +469,9 @@ CF_INLINE SInt32 _LastError(CFStreamError* error) {
 #else
 	error->error = errno;
 #endif	/* __WIN32__ */
-	
+
+    __CFSocketStreamTraceExitWithFormat("error->error %d: %s\n", error->error, strerror(error->error));
+
 	return error->error;
 }
 
@@ -828,8 +855,50 @@ _SocketStreamRead(CFReadStreamRef stream, UInt8* buffer, CFIndex bufferLength,
 		}
 		
 		/* If there's no error, try to read now. */
+
+        /* Note that in certain cases, at least with TCP sockets,
+        ** there may be a small single-digit to mid double-digit
+        ** millisecond window of time between when the socket is
+        ** connecting and the select/poll signal that the socket is ready
+        ** for reading and when the first data shows up on the socket
+        ** for actual reading. In that intervening time, read attempts
+        ** on a non-blocking socket will return EAGAIN.
+        **
+        ** At least on Linux, experience has shown that the
+        ** EAGAIN-memset-continue and subsequent
+        ** _kCFStreamSocketReadPrivateMode approach found after this
+        ** block does not actually work to resolve this situation. The
+        ** socket either experiences a time out (which never happens
+        ** on iOS/macOS/tvOS) or the process incorporating the socket
+        ** stream deadlocks indefinitely for a retry that never
+        ** arrives (which likewise never happens on
+        ** iOS/macOS/tvOS). Consequently, given the short windows
+        ** involved and the seeming-ineffectiveness of the current
+        ** solution for this, we employ a similar time-bound (as above)
+        ** retry, continuing _CFSocketRecv, until the receive is
+        ** successful or until the retry timeout expires.
+        */
 		else if (!ctxt->_error.error) {
-			result = _CFSocketRecv(ctxt->_socket, buffer, bufferLength, &ctxt->_error);
+            CFAbsoluteTime later;
+            CFTimeInterval interval;
+            CFNumberRef value = (CFNumberRef)CFDictionaryGetValue(ctxt->_properties, _kCFStreamPropertyReadTimeout);
+
+            if (!value || !CFNumberGetValue(value, kCFNumberDoubleType, &interval))
+                interval = kReadWriteTimeoutInterval;
+
+            later = (interval == 0.0) ? DBL_MAX : CFAbsoluteTimeGetCurrent() + interval;
+
+            do {
+                result = _CFSocketRecv(ctxt->_socket, buffer, bufferLength, &ctxt->_error);
+
+                if (result >= 0) {
+                    break;
+                }
+
+                if ((ctxt->_error.error != EAGAIN) && (ctxt->_error.domain == _kCFStreamErrorDomainNativeSockets)) {
+                    break;
+                }
+            } while (0 < (interval = (later - CFAbsoluteTimeGetCurrent())));
 		}
 		
 		/* Did a read, so the event is no longer good. */
